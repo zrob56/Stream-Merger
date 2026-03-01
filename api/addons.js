@@ -6,6 +6,16 @@
 const REGISTRY_URL = 'https://stremio-addons.com/catalog.json';
 const FETCH_TIMEOUT_MS = 10000;
 
+function deriveConfigUrl(entry) {
+  const hints = entry?.manifest?.behaviorHints;
+  if (hints?.configurationURL) return hints.configurationURL;
+  if (entry?.manifest?.homepage) return entry.manifest.homepage;
+  try {
+    const u = new URL(entry.transportUrl);
+    return u.origin;
+  } catch { return null; }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
@@ -45,6 +55,7 @@ export default async function handler(req, res) {
       logo:         entry.manifest?.logo ?? null,
       transportUrl: entry.transportUrl ?? null,
       types:        Array.isArray(entry.manifest?.types) ? entry.manifest.types : [],
+      configUrl:    deriveConfigUrl(entry),
     }))
     .filter((a) => a.transportUrl); // drop any entries missing a usable URL
 
