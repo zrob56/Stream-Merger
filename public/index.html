@@ -37,7 +37,7 @@
 <div id="root"></div>
 
 <script type="text/babel">
-const { useState, useCallback, useRef } = React;
+const { useState, useCallback, useEffect, useRef } = React;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -48,12 +48,6 @@ const SORT_OPTIONS = [
   { value: 'cached',   label: 'Cached Debrid first',            desc: 'Instant-play results prioritised' },
   { value: 'size',     label: 'Largest file first',             desc: 'Biggest release wins ties' },
   { value: 'seeders',  label: 'Most seeders first',             desc: 'Best P2P health' },
-];
-
-const PRESET_ADDONS = [
-  { name: 'Torrentio',   url: 'https://torrentio.strem.fun/manifest.json' },
-  { name: 'Comet',       url: 'https://comet.elfhosted.com/manifest.json' },
-  { name: 'MediaFusion', url: 'https://mediafusion.elfhosted.com/manifest.json' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -74,12 +68,17 @@ function isValidUrl(str) {
   try { new URL(str); return true; } catch { return false; }
 }
 
+// Normalize a manifest URL into a transport URL (strip /manifest.json suffix).
+// If the URL already doesn't end with /manifest.json, it's returned as-is.
+function toTransportUrl(url) {
+  return url.replace(/\/manifest\.json$/, '');
+}
+
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function AddonRow({ index, value, onChange, onRemove, onMoveUp, onMoveDown, isFirst, isLast }) {
-  const isValid = value === '' || isValidUrl(value);
+function SelectedAddonRow({ index, url, name, onRemove, onMoveUp, onMoveDown, isFirst, isLast }) {
   return (
     <div className="flex items-center gap-2 group">
       {/* Reorder */}
@@ -101,16 +100,13 @@ function AddonRow({ index, value, onChange, onRemove, onMoveUp, onMoveDown, isFi
       {/* Priority badge */}
       <span className="w-6 text-center text-xs text-zinc-500 shrink-0">#{index + 1}</span>
 
-      {/* URL input */}
-      <input
-        type="url"
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder="https://torrentio.strem.fun/.../manifest.json"
-        className={`flex-1 bg-surface border rounded px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 transition
-          ${isValid ? 'border-border focus:border-accent focus:ring-accent' : 'border-red-500 focus:ring-red-500'}`}
-        spellCheck={false}
-      />
+      {/* Name + URL */}
+      <div className="flex-1 min-w-0">
+        {name && (
+          <p className="text-sm text-zinc-200 truncate">{name}</p>
+        )}
+        <p className="text-xs text-zinc-500 truncate">{url}</p>
+      </div>
 
       {/* Remove */}
       <button
@@ -153,6 +149,183 @@ function InstallButton({ manifestUrl }) {
 }
 
 // ---------------------------------------------------------------------------
+// Addon Browser (Mode A)
+// ---------------------------------------------------------------------------
+
+function AddonBrowser({ selectedUrls, onAdd }) {
+  const [registry, setRegistry] = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState(null);
+  const [search, setSearch]     = useState('');
+
+  useEffect(() => {
+    // Skip fetch during local file:// preview — /api/addons won't be available
+    if (window.location.protocol === 'file:') {
+      setLoading(false);
+      setError('Registry browser requires a deployed Vercel URL. Use "Add custom URL" below.');
+      return;
+    }
+    fetch('/api/addons')
+      .then((r) => {
+        if (!r.ok) throw new Error(`Server returned ${r.status}`);
+        return r.json();
+      })
+      .then((data) => {
+        setRegistry(Array.isArray(data) ? data : []);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(`Could not load addon registry: ${err.message}`);
+        setLoading(false);
+      });
+  }, []);
+
+  const filtered = registry.filter((addon) =>
+    addon.name.toLowerCase().includes(search.toLowerCase()) ||
+    (addon.description ?? '').toLowerCase().includes(search.toLowerCase())
+  );
+
+  if (loading) {
+    return (
+      <div className="py-6 text-center text-sm text-zinc-500">
+        Loading addon registry…
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="py-4 text-sm text-amber-500 bg-amber-500/10 rounded border border-amber-500/20 px-3">
+        {error}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search addons…"
+        className="w-full bg-surface border border-border rounded px-3 py-2 text-sm text-zinc-100 outline-none
+                   focus:border-accent focus:ring-1 focus:ring-accent transition"
+        spellCheck={false}
+      />
+
+      <div className="max-h-72 overflow-y-auto space-y-1 pr-1">
+        {filtered.length === 0 && (
+          <p className="text-sm text-zinc-500 py-4 text-center">No addons match your search.</p>
+        )}
+        {filtered.map((addon) => {
+          const transportUrl = addon.transportUrl;
+          const isAdded = selectedUrls.has(transportUrl);
+          return (
+            <div
+              key={transportUrl}
+              className="flex items-center gap-3 p-2.5 rounded border border-border hover:border-zinc-500 transition bg-panel"
+            >
+              {/* Logo */}
+              {addon.logo ? (
+                <img
+                  src={addon.logo}
+                  alt=""
+                  className="w-8 h-8 rounded object-contain shrink-0 bg-surface"
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+              ) : (
+                <div className="w-8 h-8 rounded bg-surface border border-border shrink-0" />
+              )}
+
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-zinc-200 font-medium truncate">{addon.name}</p>
+                {addon.description && (
+                  <p className="text-xs text-zinc-500 truncate mt-0.5">{addon.description}</p>
+                )}
+                {/* Type badges */}
+                <div className="flex gap-1 mt-1 flex-wrap">
+                  {addon.types.map((t) => (
+                    <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-surface border border-border text-zinc-500">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Add / Added */}
+              {isAdded ? (
+                <span className="shrink-0 text-xs text-emerald-500 px-2">✓ Added</span>
+              ) : (
+                <button
+                  onClick={() => onAdd(addon)}
+                  className="shrink-0 text-xs px-3 py-1.5 rounded border border-accent text-accent
+                             hover:bg-accent hover:text-white transition"
+                >
+                  Add
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Custom URL input (Mode B — collapsed)
+// ---------------------------------------------------------------------------
+
+function CustomUrlInput({ onAdd }) {
+  const [open, setOpen]   = useState(false);
+  const [value, setValue] = useState('');
+  const isValid = value === '' || isValidUrl(value);
+
+  const handleAdd = () => {
+    const trimmed = value.trim();
+    if (!trimmed || !isValidUrl(trimmed)) return;
+    onAdd(trimmed);
+    setValue('');
+    setOpen(false);
+  };
+
+  return (
+    <div className="space-y-2">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="text-sm text-accent hover:text-accent-hover transition"
+      >
+        {open ? '− Hide custom URL' : '+ Add custom URL'}
+      </button>
+      {open && (
+        <div className="flex gap-2 items-center">
+          <input
+            type="url"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+            placeholder="https://…/manifest.json"
+            className={`flex-1 bg-surface border rounded px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 transition
+              ${isValid ? 'border-border focus:border-accent focus:ring-accent' : 'border-red-500 focus:ring-red-500'}`}
+            spellCheck={false}
+            autoFocus
+          />
+          <button
+            onClick={handleAdd}
+            disabled={!value || !isValid}
+            className="shrink-0 px-3 py-2 rounded border border-accent text-accent text-sm
+                       hover:bg-accent hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition"
+          >
+            Add
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main App
 // ---------------------------------------------------------------------------
 
@@ -162,39 +335,42 @@ function App() {
     ? 'https://your-app.vercel.app'
     : window.location.origin;
 
-  const [addons, setAddons] = useState(['']);
-  const [sort, setSort]     = useState('quality');
-  const [tab, setTab]       = useState('build'); // 'build' | 'install'
+  // Each selected addon: { url: string (transportUrl), name: string }
+  const [selected, setSelected] = useState([]);
+  const [sort, setSort]         = useState('quality');
 
-  // --- Addon list mutations ---
-  const updateAddon = (i, val) => setAddons(prev => prev.map((a, idx) => idx === i ? val : a));
-  const removeAddon = (i)      => setAddons(prev => prev.filter((_, idx) => idx !== i));
-  const addAddon    = ()       => setAddons(prev => [...prev, '']);
-  const moveAddon   = (i, dir) => setAddons(prev => {
+  // Set of transportUrls currently selected — for O(1) lookup in browser rows
+  const selectedUrls = new Set(selected.map((a) => a.url));
+
+  // --- Mutations ---
+  const addFromRegistry = (addon) => {
+    const url = addon.transportUrl;
+    if (selectedUrls.has(url)) return;
+    setSelected((prev) => [...prev, { url, name: addon.name }]);
+  };
+
+  const addCustomUrl = (rawUrl) => {
+    // Accept both manifest.json URLs and bare transport URLs
+    const url = toTransportUrl(rawUrl.trim());
+    if (!url || selectedUrls.has(url)) return;
+    setSelected((prev) => [...prev, { url, name: '' }]);
+  };
+
+  const removeAddon = (i) => setSelected((prev) => prev.filter((_, idx) => idx !== i));
+
+  const moveAddon = (i, dir) => setSelected((prev) => {
     const next = [...prev];
     const swap = i + dir;
     [next[i], next[swap]] = [next[swap], next[i]];
     return next;
   });
 
-  const addPreset = (url) => {
-    setAddons(prev => {
-      // Replace the last empty slot, or append
-      const emptyIdx = prev.findLastIndex(a => a === '');
-      if (emptyIdx !== -1) {
-        const next = [...prev];
-        next[emptyIdx] = url;
-        return next;
-      }
-      return [...prev, url];
-    });
-  };
-
   // --- Derived values ---
-  const validAddons   = addons.filter(a => a.trim() !== '' && isValidUrl(a));
-  const configB64     = buildConfig(validAddons, sort);
-  const manifestUrl   = buildManifestUrl(origin, configB64);
-  const isReady       = validAddons.length > 0;
+  const validAddons = selected.filter((a) => a.url && isValidUrl(a.url));
+  const addonUrls   = validAddons.map((a) => a.url);
+  const configB64   = buildConfig(addonUrls, sort);
+  const manifestUrl = buildManifestUrl(origin, configB64);
+  const isReady     = validAddons.length > 0;
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-10 space-y-8">
@@ -206,55 +382,43 @@ function App() {
           <span className="ml-2 text-xs font-normal text-zinc-500 align-middle">aggregator</span>
         </h1>
         <p className="mt-1 text-sm text-zinc-400">
-          Add your upstream addon manifest URLs. The aggregator fetches all of them in parallel,
-          deduplicates, sorts, and fixes autoplay across sources.
+          Pick your upstream addons from the registry below, set a sort preference,
+          then install the generated manifest in Stremio.
         </p>
       </div>
 
       {/* Step 1 — Addons */}
-      <section className="space-y-3">
+      <section className="space-y-4">
         <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
           1 · Upstream addons
           <span className="ml-2 font-normal normal-case text-zinc-600">(order = fetch priority)</span>
         </h2>
 
-        {/* Presets */}
-        <div className="flex flex-wrap gap-2">
-          {PRESET_ADDONS.map(p => (
-            <button
-              key={p.url}
-              onClick={() => addPreset(p.url)}
-              className="text-xs px-2.5 py-1 rounded border border-border text-zinc-400
-                         hover:border-accent hover:text-accent transition"
-            >
-              + {p.name}
-            </button>
-          ))}
-        </div>
+        {/* Mode A — Registry browser */}
+        <AddonBrowser selectedUrls={selectedUrls} onAdd={addFromRegistry} />
 
-        {/* Addon rows */}
-        <div className="space-y-2">
-          {addons.map((val, i) => (
-            <AddonRow
-              key={i}
-              index={i}
-              value={val}
-              onChange={v => updateAddon(i, v)}
-              onRemove={() => removeAddon(i)}
-              onMoveUp={() => moveAddon(i, -1)}
-              onMoveDown={() => moveAddon(i, 1)}
-              isFirst={i === 0}
-              isLast={i === addons.length - 1}
-            />
-          ))}
-        </div>
+        {/* Mode B — Custom URL */}
+        <CustomUrlInput onAdd={addCustomUrl} />
 
-        <button
-          onClick={addAddon}
-          className="text-sm text-accent hover:text-accent-hover transition"
-        >
-          + Add addon
-        </button>
+        {/* Selected addons */}
+        {selected.length > 0 && (
+          <div className="space-y-2 pt-2 border-t border-border">
+            <p className="text-xs text-zinc-500 uppercase tracking-widest">Selected ({selected.length})</p>
+            {selected.map((addon, i) => (
+              <SelectedAddonRow
+                key={`${addon.url}-${i}`}
+                index={i}
+                url={addon.url}
+                name={addon.name}
+                onRemove={() => removeAddon(i)}
+                onMoveUp={() => moveAddon(i, -1)}
+                onMoveDown={() => moveAddon(i, 1)}
+                isFirst={i === 0}
+                isLast={i === selected.length - 1}
+              />
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Step 2 — Sort */}
@@ -295,7 +459,7 @@ function App() {
         </h2>
 
         {!isReady && (
-          <p className="text-sm text-zinc-500">Add at least one valid addon URL above to generate your link.</p>
+          <p className="text-sm text-zinc-500">Add at least one addon above to generate your link.</p>
         )}
 
         {isReady && (
@@ -341,7 +505,7 @@ function App() {
                 Show raw config (debug)
               </summary>
               <pre className="mt-2 p-3 rounded bg-panel border border-border overflow-x-auto text-zinc-400">
-                {JSON.stringify({ addons: validAddons, sort }, null, 2)}
+                {JSON.stringify({ addons: addonUrls, sort }, null, 2)}
               </pre>
             </details>
           </div>
