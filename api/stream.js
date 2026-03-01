@@ -74,13 +74,23 @@ function parseConfig(raw) {
       excludeTerms:  Array.isArray(rf.excludeTerms)
         ? rf.excludeTerms.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim().toLowerCase())
         : [],
-      requiredHdr:   (rf.requiredHdr   ?? []).filter(t => HDR_LABELS.includes(t)),
-      requiredCodec: (rf.requiredCodec ?? []).filter(t => CODEC_LABELS.includes(t)),
+      requiredHdr:    (rf.requiredHdr    ?? []).filter(t => HDR_LABELS.includes(t)),
+      requiredCodec:  (rf.requiredCodec  ?? []).filter(t => CODEC_LABELS.includes(t)),
+      requiredSource: (rf.requiredSource ?? []).filter(t => SOURCE_LABELS.includes(t)),
+      requiredAudio:  (rf.requiredAudio  ?? []).filter(t => AUDIO_LABELS.includes(t)),
     };
+
+    const addonTimeouts = (parsed.addonTimeouts && typeof parsed.addonTimeouts === 'object')
+      ? Object.fromEntries(
+          Object.entries(parsed.addonTimeouts)
+            .filter(([k, v]) => typeof k === 'string' && typeof v === 'number' && v > 0)
+            .map(([k, v]) => [k, Math.min(60000, Math.max(1000, Math.round(v)))])
+        )
+      : {};
 
     return {
       addons: Array.isArray(parsed.addons) ? parsed.addons : [],
-      sort, display, limit, resCap, addonCap, debug, diversify, filters,
+      sort, display, limit, resCap, addonCap, debug, diversify, filters, addonTimeouts,
     };
   } catch {
     return {
@@ -88,7 +98,8 @@ function parseConfig(raw) {
       sort:    ['cached', 'resolution', 'seeders', 'size'],
       display: DISPLAY_DEFAULTS.slice(),
       limit: 0, resCap: 0, addonCap: 0, debug: false, diversify: false,
-      filters: { cachedOnly: false, minSeeders: 0, maxSizeGb: 0, minResolution: '', excludeTerms: [], requiredHdr: [], requiredCodec: [] },
+      filters: { cachedOnly: false, minSeeders: 0, maxSizeGb: 0, minResolution: '', excludeTerms: [], requiredHdr: [], requiredCodec: [], requiredSource: [], requiredAudio: [] },
+      addonTimeouts: {},
     };
   }
 }
@@ -187,6 +198,16 @@ function extractResolution(stream) {
 // Quality rank: lower index = higher priority
 const QUALITY_ORDER = ['4k', '2160p', '1080p', '720p', '480p', '360p', 'unknown'];
 
+const SOURCE_QUALITY_ORDER = ['Remux', 'BluRay', 'WEB-DL', 'WEBRip', 'HDTV', 'DVD', 'unknown'];
+
+function extractSourceQuality(stream) {
+  const haystack = `${stream.name ?? ''} ${stream.title ?? ''}`;
+  for (const [re, label] of SOURCE_TAGS) {
+    if (re.test(haystack)) return label;
+  }
+  return 'unknown';
+}
+
 const SOURCE_TAGS = [
   [/\bremux\b/i,         'Remux'],
   [/\bblu[- ]?ray\b/i,   'BluRay'],
@@ -216,8 +237,10 @@ const AUDIO_TAGS = [
   [/\baac\b/i,                  'AAC'],
 ];
 
-const HDR_LABELS   = HDR_TAGS.map(([, label]) => label);   // ['DV','HDR10+','HDR10','HDR','HLG']
-const CODEC_LABELS = CODEC_TAGS.map(([, label]) => label); // ['AV1','x265','x264']
+const HDR_LABELS    = HDR_TAGS.map(([, label]) => label);   // ['DV','HDR10+','HDR10','HDR','HLG']
+const CODEC_LABELS  = CODEC_TAGS.map(([, label]) => label); // ['AV1','x265','x264']
+const SOURCE_LABELS = SOURCE_TAGS.map(([, label]) => label); // ['Remux','BluRay','WEB-DL','WEBRip','HDTV','DVD']
+const AUDIO_LABELS  = AUDIO_TAGS.map(([, label]) => label);  // ['Atmos','TrueHD','DD+','DTS-HD','DTS','AAC']
 
 const DIVERSITY_SOURCE_PRIORITY = ['Remux', 'BluRay', 'WEB-DL', 'WEBRip', 'HDTV', 'DVD'];
 const DIVERSITY_HDR_PRIORITY    = ['DV', 'HDR10+', 'HDR10', 'HDR', 'HLG'];
@@ -293,10 +316,15 @@ function sortStreams(streams, sortCriteria) {
         diff = extractSizeGb(b) - extractSizeGb(a);
       } else if (criterion === 'seeders') {
         diff = extractSeeders(b) - extractSeeders(a);
+      } else if (criterion === 'source') {
+        diff = SOURCE_QUALITY_ORDER.indexOf(extractSourceQuality(a))
+             - SOURCE_QUALITY_ORDER.indexOf(extractSourceQuality(b));
       }
       if (diff !== 0) return diff;
     }
-    return 0;
+    // Final tiebreaker: addon order (lower index = higher priority)
+    const ai = (a._addonIdx ?? 999), bi = (b._addonIdx ?? 999);
+    return ai - bi;
   });
 }
 
@@ -327,6 +355,16 @@ function applyFilters(streams, filters) {
       const tags     = extractQualityTags(s);
       const detected = CODEC_LABELS.filter(c => tags.includes(c));
       if (detected.length > 0 && !filters.requiredCodec.some(c => detected.includes(c))) return false;
+    }
+    if (filters.requiredSource && filters.requiredSource.length > 0) {
+      const tags     = extractQualityTags(s);
+      const detected = SOURCE_LABELS.filter(src => tags.includes(src));
+      if (detected.length > 0 && !filters.requiredSource.some(src => detected.includes(src))) return false;
+    }
+    if (filters.requiredAudio && filters.requiredAudio.length > 0) {
+      const tags     = extractQualityTags(s);
+      const detected = AUDIO_LABELS.filter(a => tags.includes(a));
+      if (detected.length > 0 && !filters.requiredAudio.some(a => detected.includes(a))) return false;
     }
     if (filters.cachedOnly && !isCachedDebrid(s)) return false;
     if (filters.minSeeders > 0 && extractSeeders(s) < filters.minSeeders) return false;
@@ -529,7 +567,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  const { addons, sort, display, limit, resCap, addonCap, debug, diversify, filters } = parseConfig(rawConfig);
+  const { addons, sort, display, limit, resCap, addonCap, debug, diversify, filters, addonTimeouts } = parseConfig(rawConfig);
   const { imdbId, season, episode } = parseId(rawId);
 
   if (!addons.length) {
@@ -561,20 +599,23 @@ export default async function handler(req, res) {
   // --- Parallel fetch ---
   const fetchPromises = addons.map((manifestUrl) => {
     const streamUrl = buildStreamUrl(manifestUrl, type, stremioId);
-    return fetchWithTimeout(streamUrl);
+    const timeout = addonTimeouts[manifestUrl] ?? FETCH_TIMEOUT_MS;
+    return fetchWithTimeout(streamUrl, timeout);
   });
 
   const results = await Promise.allSettled(fetchPromises);
 
   // Collect streams from successful responses only
   // addonCap applied here (per-addon) so each upstream is capped before merge
+  // _addonIdx annotates each stream with its addon's position for sort tiebreaking
   const allStreams = [];
-  for (const result of results) {
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i];
     if (result.status === 'fulfilled') {
       const streams = result.value?.streams;
       if (Array.isArray(streams)) {
         const slice = addonCap > 0 ? streams.slice(0, addonCap) : streams;
-        allStreams.push(...slice);
+        allStreams.push(...slice.map(s => ({ ...s, _addonIdx: i })));
       }
     }
   }
@@ -588,7 +629,8 @@ export default async function handler(req, res) {
   const diversified = diversify ? diversifyStreams(filtered) : filtered;
   const capped     = resCap > 0 ? capByResolution(diversified, resCap) : diversified;
   const normalized = normalizeBingeGroup(capped, imdbId);
-  const displayed  = formatStreamDisplay(normalized, display);
+  const displayed  = formatStreamDisplay(normalized, display)
+    .map(({ _addonIdx, ...s }) => s);
 
   // Debug: append a synthetic entry listing any failed sub-addons
   const output = displayed.slice();
