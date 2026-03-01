@@ -66,9 +66,10 @@ function parseConfig(raw) {
 
     const rf = parsed.filters ?? {};
     const filters = {
-      cachedOnly: Boolean(rf.cachedOnly),
-      minSeeders: Math.max(0, parseInt(rf.minSeeders ?? 0, 10) || 0),
-      maxSizeGb:  Math.max(0, parseFloat(rf.maxSizeGb  ?? 0) || 0),
+      cachedOnly:    Boolean(rf.cachedOnly),
+      minSeeders:    Math.max(0, parseInt(rf.minSeeders ?? 0, 10) || 0),
+      maxSizeGb:     Math.max(0, parseFloat(rf.maxSizeGb  ?? 0) || 0),
+      minResolution: VALID_MIN_RES.has(rf.minResolution) ? rf.minResolution : '',
     };
 
     return {
@@ -81,7 +82,7 @@ function parseConfig(raw) {
       sort:    ['cached', 'resolution', 'seeders', 'size'],
       display: DISPLAY_DEFAULTS.slice(),
       limit: 0, resCap: 0, debug: false, diversify: false,
-      filters: { cachedOnly: false, minSeeders: 0, maxSizeGb: 0 },
+      filters: { cachedOnly: false, minSeeders: 0, maxSizeGb: 0, minResolution: '' },
     };
   }
 }
@@ -154,6 +155,7 @@ function fetchWithTimeout(url, timeoutMs = FETCH_TIMEOUT_MS) {
 
 // Ordered highest → lowest so the first match wins.
 const RESOLUTION_TAGS = ['4k', '2160p', '1080p', '720p', '480p', '360p'];
+const VALID_MIN_RES   = new Set(['4k', '2160p', '1080p', '720p', '480p', '360p']);
 
 /**
  * Derives a normalised resolution tag from stream name/title fields.
@@ -305,6 +307,12 @@ function applyFilters(streams, filters) {
     if (filters.cachedOnly && !isCachedDebrid(s)) return false;
     if (filters.minSeeders > 0 && extractSeeders(s) < filters.minSeeders) return false;
     if (filters.maxSizeGb  > 0 && extractSizeGb(s)  > filters.maxSizeGb)  return false;
+    if (filters.minResolution) {
+      const minIdx    = QUALITY_ORDER.indexOf(filters.minResolution);
+      const streamIdx = QUALITY_ORDER.indexOf(extractResolution(s));
+      // 'unknown' (last index) streams pass through — may be unlabeled high-quality
+      if (streamIdx < QUALITY_ORDER.length - 1 && streamIdx > minIdx) return false;
+    }
     return true;
   });
 }

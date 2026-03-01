@@ -62,7 +62,7 @@ const DISPLAY_OPTIONS = [
 ];
 const DEFAULT_DISPLAY = ['source', 'resolution', 'cached', 'tags', 'filename', 'seeders', 'size'];
 
-const DEFAULT_FILTERS = { cachedOnly: false, minSeeders: 0, maxSizeGb: 0 };
+const DEFAULT_FILTERS = { cachedOnly: false, minSeeders: 0, maxSizeGb: 0, minResolution: '' };
 
 // Quick-start preset configs — populate sort order and add starter addons
 const PRESETS = [
@@ -102,7 +102,7 @@ function buildConfig(addons, sort, display, { limit, resCap, debug, diversify, f
   if (resCap > 0) payload.resCap = resCap;
   if (debug)      payload.debug  = true;
   if (diversify)  payload.diversify = true;
-  if (filters.cachedOnly || filters.minSeeders > 0 || filters.maxSizeGb > 0) {
+  if (filters.cachedOnly || filters.minSeeders > 0 || filters.maxSizeGb > 0 || filters.minResolution) {
     payload.filters = filters;
   }
   return btoa(JSON.stringify(payload));
@@ -570,6 +570,24 @@ function FiltersSection({ filters, setFilters, limit, setLimit, resCap, setResCa
         />
       </Row>
 
+      {/* Min resolution */}
+      <Row>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-zinc-200">Min resolution</p>
+          <p className="text-xs text-zinc-500">Hide streams below this quality (unknown resolution always passes)</p>
+        </div>
+        <select
+          value={filters.minResolution}
+          onChange={e => setFilters(f => ({ ...f, minResolution: e.target.value }))}
+          className="bg-panel border border-border rounded px-2 py-1 text-sm text-zinc-200 focus:outline-none focus:border-zinc-400"
+        >
+          <option value="">Off</option>
+          <option value="720p">720p+ (exclude 480p / 360p)</option>
+          <option value="1080p">1080p+ (exclude 720p and below)</option>
+          <option value="2160p">2160p / 4K only</option>
+        </select>
+      </Row>
+
       {/* Stream limit */}
       <Row>
         <div className="flex-1 min-w-0">
@@ -703,7 +721,7 @@ function App() {
   const manifestUrl = buildManifestUrl(origin, configB64);
   const isReady     = validAddons.length > 0;
 
-  const hasActiveFilters = filters.cachedOnly || filters.minSeeders > 0 || filters.maxSizeGb > 0;
+  const hasActiveFilters = filters.cachedOnly || filters.minSeeders > 0 || filters.maxSizeGb > 0 || !!filters.minResolution;
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-10 space-y-8">
@@ -834,6 +852,9 @@ function App() {
               )}
               {filters.maxSizeGb > 0 && (
                 <span className="px-2 py-0.5 rounded bg-panel border border-border">≤{filters.maxSizeGb} GB</span>
+              )}
+              {filters.minResolution && (
+                <span className="px-2 py-0.5 rounded bg-panel border border-border">≥{filters.minResolution}</span>
               )}
               {limit > 0 && (
                 <span className="px-2 py-0.5 rounded bg-panel border border-border">limit: {limit}</span>
