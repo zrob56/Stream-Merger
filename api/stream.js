@@ -48,7 +48,7 @@ function parseConfig(raw) {
 
     let sort = parsed.sort;
     if (!Array.isArray(sort)) {
-      sort = typeof sort === 'string' ? [sort] : ['cached', 'resolution', 'seeders', 'size'];
+      sort = typeof sort === 'string' ? [sort] : ['cached', 'resolution', 'english', 'subs', 'seeders', 'size', 'source'];
     }
     sort = sort.map(s => s === 'quality' ? 'resolution' : s);
 
