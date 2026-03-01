@@ -49,10 +49,8 @@ const SORT_CRITERIA = [
   { value: 'seeders',    label: 'Seeders',        desc: 'Best P2P health first' },
   { value: 'size',       label: 'File size',      desc: 'Largest release first' },
   { value: 'source',     label: 'Source quality', desc: 'Remux → BluRay → WEB-DL → WEBRip → …' },
-  { value: 'english',    label: 'English audio',  desc: 'Streams tagged with English audio first' },
-  { value: 'subs',       label: 'Subtitles',      desc: 'Streams with embedded/hardcoded subtitles first' },
 ];
-const DEFAULT_SORT = ['cached', 'resolution', 'english', 'subs', 'seeders', 'size', 'source'];
+const DEFAULT_SORT = ['cached', 'resolution', 'seeders', 'size', 'source'];
 
 const DISPLAY_OPTIONS = [
   { value: 'source',     label: 'Source',       desc: 'Addon name (e.g. Torrentio, Comet)' },
@@ -65,7 +63,7 @@ const DISPLAY_OPTIONS = [
 ];
 const DEFAULT_DISPLAY = ['source', 'resolution', 'cached', 'tags', 'filename', 'seeders', 'size'];
 
-const DEFAULT_FILTERS = { cachedOnly: false, minSeeders: 0, maxSizeGb: 0, minResolution: '', excludeTerms: [], requiredHdr: [], requiredSource: [], requiredAudio: [] };
+const DEFAULT_FILTERS = { cachedOnly: false, minSeeders: 0, maxSizeGb: 0, minResolution: '', excludeTerms: [], requiredHdr: [], requiredSource: [], requiredAudio: [], requireEnglish: false, requireSubs: false };
 
 const HDR_PILL_OPTIONS    = ['DV', 'HDR10+', 'HDR10', 'HDR', 'HLG'];
 const SOURCE_PILL_OPTIONS = ['Remux', 'BluRay', 'WEB-DL', 'WEBRip', 'HDTV', 'DVD'];
@@ -115,7 +113,8 @@ function buildConfig(addons, sort, display, { limit, resCap, addonCap, debug, di
   if (diversify)    payload.diversify = true;
   if (filters.cachedOnly || filters.minSeeders > 0 || filters.maxSizeGb > 0 || filters.minResolution
       || filters.excludeTerms.length > 0 || filters.requiredHdr.length > 0
-      || filters.requiredSource.length > 0 || filters.requiredAudio.length > 0) {
+      || filters.requiredSource.length > 0 || filters.requiredAudio.length > 0
+      || filters.requireEnglish || filters.requireSubs) {
     payload.filters = filters;
   }
   if (addonTimeouts) {
@@ -690,6 +689,36 @@ function FiltersSection({ filters, setFilters, limit, setLimit, resCap, setResCa
         </div>
       </label>
 
+      {/* Require English audio */}
+      <label className="flex items-center gap-3 p-2.5 rounded border border-border bg-panel
+                        cursor-pointer hover:border-zinc-500 transition select-none">
+        <input
+          type="checkbox"
+          checked={filters.requireEnglish}
+          onChange={e => setFilters(f => ({ ...f, requireEnglish: e.target.checked }))}
+          className="w-4 h-4 shrink-0 accent-violet-600"
+        />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-zinc-200">Require English audio</p>
+          <p className="text-xs text-zinc-500">Only streams tagged ENG</p>
+        </div>
+      </label>
+
+      {/* Require subtitles */}
+      <label className="flex items-center gap-3 p-2.5 rounded border border-border bg-panel
+                        cursor-pointer hover:border-zinc-500 transition select-none">
+        <input
+          type="checkbox"
+          checked={filters.requireSubs}
+          onChange={e => setFilters(f => ({ ...f, requireSubs: e.target.checked }))}
+          className="w-4 h-4 shrink-0 accent-violet-600"
+        />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-zinc-200">Require subtitles</p>
+          <p className="text-xs text-zinc-500">Only streams with embedded/hardcoded subs</p>
+        </div>
+      </label>
+
       {/* Keyword exclusion */}
       <div className="p-2.5 rounded border border-border bg-panel space-y-2">
         <div>
@@ -1134,7 +1163,8 @@ function App() {
 
   const hasActiveFilters = filters.cachedOnly || filters.minSeeders > 0 || filters.maxSizeGb > 0 || !!filters.minResolution
     || filters.excludeTerms.length > 0 || filters.requiredHdr.length > 0
-    || filters.requiredSource.length > 0 || filters.requiredAudio.length > 0;
+    || filters.requiredSource.length > 0 || filters.requiredAudio.length > 0
+    || filters.requireEnglish || filters.requireSubs;
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-10 space-y-8">
@@ -1318,6 +1348,12 @@ function App() {
               </span>
               {filters.cachedOnly && (
                 <span className="px-2 py-0.5 rounded bg-panel border border-border">cached only</span>
+              )}
+              {filters.requireEnglish && (
+                <span className="px-2 py-0.5 rounded bg-panel border border-border">ENG</span>
+              )}
+              {filters.requireSubs && (
+                <span className="px-2 py-0.5 rounded bg-panel border border-border">Subs</span>
               )}
               {filters.excludeTerms.length > 0 && (
                 <span className="px-2 py-0.5 rounded bg-panel border border-border">excl: {filters.excludeTerms.join(', ')}</span>
