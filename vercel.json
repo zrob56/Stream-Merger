@@ -1,0 +1,32 @@
+{
+  "version": 2,
+  "routes": [
+    {
+      "src": "/stremio/([^/]+)/manifest\\.json",
+      "dest": "/api/manifest.js?config=$1",
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS"
+      }
+    },
+    {
+      "src": "/stremio/([^/]+)/stream/([^/]+)/([^/]+)\\.json",
+      "dest": "/api/stream.js?config=$1&type=$2&id=$3",
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS"
+      }
+    },
+    {
+      "src": "/stremio/([^/]+)/meta/([^/]+)/([^/]+)\\.json",
+      "dest": "/api/meta.js?config=$1&type=$2&id=$3",
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS"
+      }
+    }
+  ]
+}

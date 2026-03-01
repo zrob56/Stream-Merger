@@ -1,0 +1,8 @@
+{
+  "name": "unified-stream-aggregator",
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  }
+}
