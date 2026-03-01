@@ -43,7 +43,8 @@ async function getRedis() {
  */
 function parseConfig(raw) {
   try {
-    const json = Buffer.from(raw, 'base64').toString('utf8');
+    const normalized = raw.replace(/-/g, '+').replace(/_/g, '/');
+    const json = Buffer.from(normalized, 'base64').toString('utf8');
     const parsed = JSON.parse(json);
 
     let sort = parsed.sort;
