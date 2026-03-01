@@ -59,8 +59,9 @@ function parseConfig(raw) {
     display = display.filter(k => DISPLAY_DEFAULTS.includes(k));
     if (display.length === 0) display = DISPLAY_DEFAULTS.slice();
 
-    const limit    = typeof parsed.limit  === 'number' && parsed.limit  > 0 ? Math.floor(parsed.limit)  : 0;
-    const resCap   = typeof parsed.resCap === 'number' && parsed.resCap > 0 ? Math.floor(parsed.resCap) : 0;
+    const limit    = typeof parsed.limit    === 'number' && parsed.limit    > 0 ? Math.floor(parsed.limit)    : 0;
+    const resCap   = typeof parsed.resCap   === 'number' && parsed.resCap   > 0 ? Math.floor(parsed.resCap)   : 0;
+    const addonCap = typeof parsed.addonCap === 'number' && parsed.addonCap > 0 ? Math.floor(parsed.addonCap) : 0;
     const debug    = Boolean(parsed.debug);
     const diversify = Boolean(parsed.diversify);
 
@@ -70,19 +71,24 @@ function parseConfig(raw) {
       minSeeders:    Math.max(0, parseInt(rf.minSeeders ?? 0, 10) || 0),
       maxSizeGb:     Math.max(0, parseFloat(rf.maxSizeGb  ?? 0) || 0),
       minResolution: VALID_MIN_RES.has(rf.minResolution) ? rf.minResolution : '',
+      excludeTerms:  Array.isArray(rf.excludeTerms)
+        ? rf.excludeTerms.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim().toLowerCase())
+        : [],
+      requiredHdr:   (rf.requiredHdr   ?? []).filter(t => HDR_LABELS.includes(t)),
+      requiredCodec: (rf.requiredCodec ?? []).filter(t => CODEC_LABELS.includes(t)),
     };
 
     return {
       addons: Array.isArray(parsed.addons) ? parsed.addons : [],
-      sort, display, limit, resCap, debug, diversify, filters,
+      sort, display, limit, resCap, addonCap, debug, diversify, filters,
     };
   } catch {
     return {
       addons: [],
       sort:    ['cached', 'resolution', 'seeders', 'size'],
       display: DISPLAY_DEFAULTS.slice(),
-      limit: 0, resCap: 0, debug: false, diversify: false,
-      filters: { cachedOnly: false, minSeeders: 0, maxSizeGb: 0, minResolution: '' },
+      limit: 0, resCap: 0, addonCap: 0, debug: false, diversify: false,
+      filters: { cachedOnly: false, minSeeders: 0, maxSizeGb: 0, minResolution: '', excludeTerms: [], requiredHdr: [], requiredCodec: [] },
     };
   }
 }
@@ -210,6 +216,9 @@ const AUDIO_TAGS = [
   [/\baac\b/i,                  'AAC'],
 ];
 
+const HDR_LABELS   = HDR_TAGS.map(([, label]) => label);   // ['DV','HDR10+','HDR10','HDR','HLG']
+const CODEC_LABELS = CODEC_TAGS.map(([, label]) => label); // ['AV1','x265','x264']
+
 const DIVERSITY_SOURCE_PRIORITY = ['Remux', 'BluRay', 'WEB-DL', 'WEBRip', 'HDTV', 'DVD'];
 const DIVERSITY_HDR_PRIORITY    = ['DV', 'HDR10+', 'HDR10', 'HDR', 'HLG'];
 
@@ -304,6 +313,21 @@ function sortStreams(streams, sortCriteria) {
  */
 function applyFilters(streams, filters) {
   return streams.filter(s => {
+    if (filters.excludeTerms.length > 0) {
+      const hay = `${s.name ?? ''} ${s.title ?? ''}`.toLowerCase();
+      if (filters.excludeTerms.some(t => hay.includes(t))) return false;
+    }
+    if (filters.requiredHdr.length > 0) {
+      const tags     = extractQualityTags(s);
+      const detected = HDR_LABELS.filter(h => tags.includes(h));
+      // streams with no detectable HDR tag pass (unknown quality)
+      if (detected.length > 0 && !filters.requiredHdr.some(h => detected.includes(h))) return false;
+    }
+    if (filters.requiredCodec.length > 0) {
+      const tags     = extractQualityTags(s);
+      const detected = CODEC_LABELS.filter(c => tags.includes(c));
+      if (detected.length > 0 && !filters.requiredCodec.some(c => detected.includes(c))) return false;
+    }
     if (filters.cachedOnly && !isCachedDebrid(s)) return false;
     if (filters.minSeeders > 0 && extractSeeders(s) < filters.minSeeders) return false;
     if (filters.maxSizeGb  > 0 && extractSizeGb(s)  > filters.maxSizeGb)  return false;
@@ -505,7 +529,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  const { addons, sort, display, limit, resCap, debug, diversify, filters } = parseConfig(rawConfig);
+  const { addons, sort, display, limit, resCap, addonCap, debug, diversify, filters } = parseConfig(rawConfig);
   const { imdbId, season, episode } = parseId(rawId);
 
   if (!addons.length) {
@@ -543,11 +567,15 @@ export default async function handler(req, res) {
   const results = await Promise.allSettled(fetchPromises);
 
   // Collect streams from successful responses only
+  // addonCap applied here (per-addon) so each upstream is capped before merge
   const allStreams = [];
   for (const result of results) {
     if (result.status === 'fulfilled') {
       const streams = result.value?.streams;
-      if (Array.isArray(streams)) allStreams.push(...streams);
+      if (Array.isArray(streams)) {
+        const slice = addonCap > 0 ? streams.slice(0, addonCap) : streams;
+        allStreams.push(...slice);
+      }
     }
   }
 
