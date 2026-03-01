@@ -198,6 +198,15 @@ function extractResolution(stream) {
 // Quality rank: lower index = higher priority
 const QUALITY_ORDER = ['4k', '2160p', '1080p', '720p', '480p', '360p', 'unknown'];
 
+const RESOLUTION_ICONS = {
+  '4k':    '🔵',
+  '2160p': '🔵',
+  '1080p': '🟢',
+  '720p':  '🟡',
+  '480p':  '🔴',
+  '360p':  '🔴',
+};
+
 const SOURCE_QUALITY_ORDER = ['Remux', 'BluRay', 'WEB-DL', 'WEBRip', 'HDTV', 'DVD', 'unknown'];
 
 function extractSourceQuality(stream) {
@@ -284,6 +293,20 @@ function extractQualityTags(stream) {
   return tags;
 }
 
+function formatTagsWithIcons(stream) {
+  const haystack = `${stream.name ?? ''} ${stream.title ?? ''}`;
+  const parts = [];
+  const src   = SOURCE_TAGS.filter(([re]) => re.test(haystack)).map(([, l]) => l);
+  const hdr   = HDR_TAGS.filter(([re]) => re.test(haystack)).map(([, l]) => l);
+  const codec = CODEC_TAGS.filter(([re]) => re.test(haystack)).map(([, l]) => l);
+  const audio = AUDIO_TAGS.filter(([re]) => re.test(haystack)).map(([, l]) => l);
+  if (src.length)   parts.push(`🎬 ${src.join(' · ')}`);
+  if (hdr.length)   parts.push(`✨ ${hdr.join(' · ')}`);
+  if (codec.length) parts.push(`🎞️ ${codec.join(' · ')}`);
+  if (audio.length) parts.push(`🔊 ${audio.join(' · ')}`);
+  return parts.join('  ');
+}
+
 /**
  * Returns true if the stream name/title signals a cached debrid result.
  *
@@ -293,6 +316,16 @@ function extractQualityTags(stream) {
 function isCachedDebrid(stream) {
   const haystack = `${stream.name ?? ''} ${stream.title ?? ''}`.toLowerCase();
   return haystack.includes('cached') || haystack.includes('⚡') || haystack.includes('rd+');
+}
+
+function isEnglishAudio(stream) {
+  const haystack = `${stream.name ?? ''} ${stream.title ?? ''}`;
+  return /\benglish\b|\beng\b/i.test(haystack);
+}
+
+function hasEmbeddedSubs(stream) {
+  const haystack = `${stream.name ?? ''} ${stream.title ?? ''}`;
+  return /\bsubs?\b|\bsubtitles?\b|\bhardcoded\b/i.test(haystack);
 }
 
 /**
@@ -319,6 +352,10 @@ function sortStreams(streams, sortCriteria) {
       } else if (criterion === 'source') {
         diff = SOURCE_QUALITY_ORDER.indexOf(extractSourceQuality(a))
              - SOURCE_QUALITY_ORDER.indexOf(extractSourceQuality(b));
+      } else if (criterion === 'english') {
+        diff = (isEnglishAudio(b) ? 1 : 0) - (isEnglishAudio(a) ? 1 : 0);
+      } else if (criterion === 'subs') {
+        diff = (hasEmbeddedSubs(b) ? 1 : 0) - (hasEmbeddedSubs(a) ? 1 : 0);
       }
       if (diff !== 0) return diff;
     }
@@ -521,8 +558,11 @@ function formatStreamDisplay(streams, display) {
       if (src) nameParts.push(src);
     }
     if (show.has('resolution')) {
-      const res = extractResolution(stream);
-      if (res !== 'unknown') nameParts.push(res.toUpperCase());
+      const res  = extractResolution(stream);
+      if (res !== 'unknown') {
+        const icon = RESOLUTION_ICONS[res] ?? '';
+        nameParts.push(icon ? `${icon} ${res.toUpperCase()}` : res.toUpperCase());
+      }
     }
     if (show.has('cached') && isCachedDebrid(stream)) {
       nameParts.push('⚡');
@@ -535,9 +575,13 @@ function formatStreamDisplay(streams, display) {
       if (fn) titleParts.push(fn);
     }
     if (show.has('tags')) {
-      const t = extractQualityTags(stream).join(' · ');
+      const t = formatTagsWithIcons(stream);
       if (t) titleParts.push(t);
     }
+    const langParts = [];
+    if (isEnglishAudio(stream))  langParts.push('🔤 ENG');
+    if (hasEmbeddedSubs(stream)) langParts.push('💬 Subs');
+    if (langParts.length) titleParts.push(langParts.join('  '));
     if (show.has('seeders')) {
       const s = extractSeeders(stream);
       if (s > 0) titleParts.push(`👤 ${s}`);

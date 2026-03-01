@@ -49,8 +49,10 @@ const SORT_CRITERIA = [
   { value: 'seeders',    label: 'Seeders',        desc: 'Best P2P health first' },
   { value: 'size',       label: 'File size',      desc: 'Largest release first' },
   { value: 'source',     label: 'Source quality', desc: 'Remux → BluRay → WEB-DL → WEBRip → …' },
+  { value: 'english',    label: 'English audio',  desc: 'Streams tagged with English audio first' },
+  { value: 'subs',       label: 'Subtitles',      desc: 'Streams with embedded/hardcoded subtitles first' },
 ];
-const DEFAULT_SORT = ['cached', 'resolution', 'seeders', 'size', 'source'];
+const DEFAULT_SORT = ['cached', 'resolution', 'english', 'subs', 'seeders', 'size', 'source'];
 
 const DISPLAY_OPTIONS = [
   { value: 'source',     label: 'Source',       desc: 'Addon name (e.g. Torrentio, Comet)' },
