@@ -52,7 +52,7 @@ const SORT_CRITERIA = [
   { value: 'english',    label: 'English audio',  desc: 'Streams tagged ENG first' },
   { value: 'subs',       label: 'Subtitles',      desc: 'Streams with embedded/hardcoded subs first' },
 ];
-const DEFAULT_SORT = ['cached', 'resolution', 'seeders', 'size', 'source'];
+const DEFAULT_SORT = ['cached', 'resolution', 'seeders', 'size', 'source', 'english', 'subs'];
 
 const DISPLAY_OPTIONS = [
   { value: 'source',     label: 'Source',       desc: 'Addon name (e.g. Torrentio, Comet)' },
@@ -243,7 +243,7 @@ function InstallButton({ manifestUrl }) {
 // Preset quick-start row
 // ---------------------------------------------------------------------------
 
-function PresetsRow({ onApply }) {
+function PresetsRow({ onApply, onReset }) {
   return (
     <div className="space-y-2">
       <p className="text-xs text-zinc-500 uppercase tracking-widest">Quick start</p>
@@ -259,6 +259,14 @@ function PresetsRow({ onApply }) {
             {preset.label}
           </button>
         ))}
+        <button
+          onClick={onReset}
+          title="Clear all settings and restore defaults"
+          className="px-3 py-1.5 rounded border border-red-900 bg-panel text-sm text-red-400
+                     hover:border-red-500 hover:text-red-300 transition"
+        >
+          Reset to defaults
+        </button>
       </div>
       <p className="text-xs text-zinc-600">
         Presets update the sort order and add starter addons — existing addons are kept.
@@ -1308,7 +1316,7 @@ function App() {
         </h2>
 
         {/* Quick-start presets */}
-        <PresetsRow onApply={applyPreset} />
+        <PresetsRow onApply={applyPreset} onReset={resetToDefaults} />
 
         {/* Named saved presets */}
         <SavedPresetsRow
