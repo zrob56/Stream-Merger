@@ -325,7 +325,19 @@ function formatTagsWithIcons(stream) {
  */
 function isCachedDebrid(stream) {
   const haystack = `${stream.name ?? ''} ${stream.title ?? ''}`.toLowerCase();
-  return haystack.includes('cached') || haystack.includes('⚡') || haystack.includes('rd+');
+  // Common debrid cache signals across Torrentio, Comet, MediaFusion, etc.
+  return (
+    haystack.includes('cached') ||
+    haystack.includes('⚡') ||
+    haystack.includes('🟢') ||
+    haystack.includes('rd+') ||
+    haystack.includes('[rd]') ||
+    haystack.includes('[ad]') ||
+    haystack.includes('[pm]') ||
+    haystack.includes('[dl]') ||
+    haystack.includes('[tb]') ||
+    haystack.includes('debrid')
+  );
 }
 
 function isEnglishAudio(stream) {
@@ -713,6 +725,35 @@ export default async function handler(req, res) {
   const output = displayed.slice();
   if (debug) {
     const lines = [];
+
+    // Per-filter drop counts (on the post-dedup pool)
+    const filterLines = [];
+    if (filters.cachedOnly) {
+      const n = deduped.filter(s => !isCachedDebrid(s)).length;
+      filterLines.push(`  cachedOnly blocked ${n}/${deduped.length}`);
+    }
+    if (filters.minSeeders > 0) {
+      const n = deduped.filter(s => extractSeeders(s) < filters.minSeeders).length;
+      filterLines.push(`  minSeeders(${filters.minSeeders}) blocked ${n}/${deduped.length}`);
+    }
+    if (filters.maxSizeGb > 0) {
+      const n = deduped.filter(s => extractSizeGb(s) > filters.maxSizeGb).length;
+      filterLines.push(`  maxSizeGb(${filters.maxSizeGb}) blocked ${n}/${deduped.length}`);
+    }
+    if (filters.minResolution) {
+      const mi = QUALITY_ORDER.indexOf(filters.minResolution);
+      const n = deduped.filter(s => {
+        const ri = QUALITY_ORDER.indexOf(extractResolution(s));
+        return ri === -1 || ri > mi;
+      }).length;
+      filterLines.push(`  minResolution(${filters.minResolution}) blocked ${n}/${deduped.length}`);
+    }
+    if (filterLines.length) {
+      lines.push('📊 Filter drops (post-dedup pool):');
+      lines.push(...filterLines);
+      lines.push('');
+    }
+
     for (let i = 0; i < results.length; i++) {
       let host;
       try { host = new URL(addons[i]).hostname; } catch { host = addons[i]; }
