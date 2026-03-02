@@ -723,7 +723,7 @@ export default async function handler(req, res) {
     survivingCounts[idx] = (survivingCounts[idx] ?? 0) + 1;
   }
 
-  const displayed = formatted.map(({ _addonIdx, _sources, ...s }) => {
+  const displayed = formatted.map(({ _addonIdx, _sources, description: _desc, ...s }) => {
     // If both url (debrid link) and infoHash (torrent hash) are present, strip the P2P
     // fields — Stremio silently drops streams that have multiple playable source types.
     let clean = s;
