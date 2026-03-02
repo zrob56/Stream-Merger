@@ -5,7 +5,6 @@
 import { createHash } from 'crypto';
 
 const FETCH_TIMEOUT_MS = 8500;
-const SOFT_TIMEOUT_MS  = 2500;
 
 const DISPLAY_DEFAULTS = ['source', 'resolution', 'cached', 'tags', 'filename', 'seeders', 'size'];
 
@@ -668,29 +667,7 @@ export default async function handler(req, res) {
     return fetchWithTimeout(streamUrl, timeout);
   });
 
-  // Soft timeout: if any addon responds within SOFT_TIMEOUT_MS, proceed early
-  // rather than waiting up to FETCH_TIMEOUT_MS for the slowest addon.
-  const settledResults = new Array(addons.length).fill(null);
-  const trackedPromises = fetchPromises.map((p, i) =>
-    p.then(
-      value  => { settledResults[i] = { status: 'fulfilled', value };  return value; },
-      reason => { settledResults[i] = { status: 'rejected',  reason }; throw reason; }
-    )
-  );
-
-  const results = await Promise.race([
-    Promise.allSettled(trackedPromises),
-    new Promise(resolve => {
-      setTimeout(() => {
-        if (settledResults.some(r => r?.status === 'fulfilled')) {
-          resolve(settledResults.map((r, i) =>
-            r ?? { status: 'rejected', reason: new Error(`Soft timeout (addon ${i})`) }
-          ));
-        }
-        // No results yet — let Promise.allSettled win instead
-      }, SOFT_TIMEOUT_MS);
-    }),
-  ]);
+  const results = await Promise.allSettled(fetchPromises);
 
   // Collect streams from successful responses only
   // addonCap applied here (per-addon) so each upstream is capped before merge
