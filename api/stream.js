@@ -698,10 +698,18 @@ export default async function handler(req, res) {
   const diversified = diversify ? diversifyStreams(filtered) : filtered;
   const capped     = resCap > 0 ? capByResolution(diversified, resCap) : diversified;
   const normalized = normalizeBingeGroup(capped, imdbId);
-  const displayed  = formatStreamDisplay(normalized, display)
-    .map(({ _addonIdx, _sources, ...s }) => s);
+  const formatted  = formatStreamDisplay(normalized, display);
 
-  // Debug: append a synthetic entry listing per-addon results
+  // Count surviving streams per addon (before stripping _addonIdx) for debug
+  const survivingCounts = {};
+  for (const s of formatted) {
+    const idx = s._addonIdx ?? -1;
+    survivingCounts[idx] = (survivingCounts[idx] ?? 0) + 1;
+  }
+
+  const displayed = formatted.map(({ _addonIdx, _sources, ...s }) => s);
+
+  // Debug: append a synthetic entry listing per-addon results (raw + post-pipeline)
   const output = displayed.slice();
   if (debug) {
     const lines = [];
@@ -713,8 +721,13 @@ export default async function handler(req, res) {
         const reason = String(r.reason?.message ?? r.reason ?? 'unknown').slice(0, 120);
         lines.push(`❌ ${host}: ${reason}`);
       } else {
-        const count = r.value?.streams?.length ?? 0;
-        lines.push(count > 0 ? `✅ ${host}: ${count} streams` : `⚠️ ${host}: 0 streams (no .streams key or empty)`);
+        const raw = r.value?.streams?.length ?? 0;
+        const surviving = survivingCounts[i] ?? 0;
+        if (raw === 0) {
+          lines.push(`⚠️ ${host}: 0 streams (no .streams key or empty)`);
+        } else {
+          lines.push(`${surviving > 0 ? '✅' : '🔻'} ${host}: ${raw} raw → ${surviving} after pipeline`);
+        }
       }
     }
     output.push({
