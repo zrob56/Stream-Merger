@@ -169,8 +169,6 @@ function fetchWithTimeout(url, timeoutMs = FETCH_TIMEOUT_MS) {
   })
     .then((res) => {
       if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
-      const ct = res.headers.get('content-type') ?? '';
-      if (!ct.includes('application/json')) throw new Error(`Non-JSON response (offline/HTML) from ${url}`);
       return res.json();
     })
     .finally(() => clearTimeout(timer));
@@ -703,22 +701,27 @@ export default async function handler(req, res) {
   const displayed  = formatStreamDisplay(normalized, display)
     .map(({ _addonIdx, _sources, ...s }) => s);
 
-  // Debug: append a synthetic entry listing any failed sub-addons
+  // Debug: append a synthetic entry listing per-addon results
   const output = displayed.slice();
   if (debug) {
-    const failedNames = results
-      .map((r, i) => {
-        if (r.status !== 'rejected') return null;
-        try { return new URL(addons[i]).hostname; } catch { return addons[i]; }
-      })
-      .filter(Boolean);
-    if (failedNames.length) {
-      output.push({
-        name:  '⚠️ Aggregator',
-        title: `Failed: ${failedNames.join(', ')}`,
-        url:   'about:blank',
-      });
+    const lines = [];
+    for (let i = 0; i < results.length; i++) {
+      let host;
+      try { host = new URL(addons[i]).hostname; } catch { host = addons[i]; }
+      const r = results[i];
+      if (r.status === 'rejected') {
+        const reason = String(r.reason?.message ?? r.reason ?? 'unknown').slice(0, 120);
+        lines.push(`❌ ${host}: ${reason}`);
+      } else {
+        const count = r.value?.streams?.length ?? 0;
+        lines.push(count > 0 ? `✅ ${host}: ${count} streams` : `⚠️ ${host}: 0 streams (no .streams key or empty)`);
+      }
     }
+    output.push({
+      name:  '🔍 Aggregator Debug',
+      title: lines.join('\n'),
+      url:   'about:blank',
+    });
   }
 
   const final = limit > 0 ? output.slice(0, limit) : output;
