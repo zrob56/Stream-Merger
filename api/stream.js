@@ -724,20 +724,22 @@ export default async function handler(req, res) {
   }
 
   const displayed = formatted.map(({ _addonIdx, _sources, ...s }) => {
-    // Enforce Stremio stream-type mutual exclusivity.
-    // Addons like Comet return both url (debrid link) and infoHash (torrent hash).
-    // Stremio silently drops streams that have both — url wins.
+    // If both url (debrid link) and infoHash (torrent hash) are present, strip the P2P
+    // fields — Stremio silently drops streams that have multiple playable source types.
     let clean = s;
     if (s.url && s.infoHash) {
-      const { infoHash, ...rest } = s;
+      const { infoHash, fileIdx, sources, ...rest } = s;
       clean = rest;
     }
-    // Mirror title → description for Stremio v5, which prioritises description in its UI.
-    return { ...clean, description: clean.title ?? '' };
+    // Mirror title → description for Stremio v5 only when the addon didn't already set one
+    if (!clean.description && clean.title) {
+      return { ...clean, description: clean.title };
+    }
+    return clean;
   });
 
-  // Debug: append a synthetic entry listing per-addon results (raw + post-pipeline)
-  const output = displayed.slice();
+  // Apply limit to real streams BEFORE debug so the debug entry always appears last
+  const final = limit > 0 ? displayed.slice(0, limit) : displayed.slice();
   if (debug) {
     const lines = [];
 
@@ -786,14 +788,13 @@ export default async function handler(req, res) {
         }
       }
     }
-    output.push({
-      name:  '🔍 Aggregator Debug',
-      title: lines.join('\n'),
-      url:   'about:blank',
+    final.push({
+      name:        '🔍 Aggregator Debug',
+      title:       lines.join('\n'),
+      description: lines.join('\n'),
+      externalUrl: 'https://stremio.com',
     });
   }
-
-  const final = limit > 0 ? output.slice(0, limit) : output;
 
   // Store in Redis cache (non-fatal if it fails)
   if (redis) {
