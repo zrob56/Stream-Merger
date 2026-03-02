@@ -602,9 +602,9 @@ function DebridQuickAdd({ onAdd }) {
           body: JSON.stringify({ streaming_providers: [{ service, token: key }] }),
         });
         const data = await res.json();
-        const secretStr = data.secret_str;
-        if (secretStr) {
-          urls.push({ url: `https://mediafusion.elfhosted.com/${secretStr}/manifest.json`, name: `MediaFusion (${abbr})` });
+        const encryptedStr = data.encrypted_str;
+        if (encryptedStr) {
+          urls.push({ url: `https://mediafusion.elfhosted.com/${encryptedStr}/manifest.json`, name: `MediaFusion (${abbr})` });
         }
       } catch (e) {
         console.error('MediaFusion encrypt failed:', e);
