@@ -723,7 +723,18 @@ export default async function handler(req, res) {
     survivingCounts[idx] = (survivingCounts[idx] ?? 0) + 1;
   }
 
-  const displayed = formatted.map(({ _addonIdx, _sources, ...s }) => s);
+  const displayed = formatted.map(({ _addonIdx, _sources, ...s }) => {
+    // Enforce Stremio stream-type mutual exclusivity.
+    // Addons like Comet return both url (debrid link) and infoHash (torrent hash).
+    // Stremio silently drops streams that have both — url wins.
+    let clean = s;
+    if (s.url && s.infoHash) {
+      const { infoHash, ...rest } = s;
+      clean = rest;
+    }
+    // Mirror title → description for Stremio v5, which prioritises description in its UI.
+    return { ...clean, description: clean.title ?? '' };
+  });
 
   // Debug: append a synthetic entry listing per-addon results (raw + post-pipeline)
   const output = displayed.slice();
