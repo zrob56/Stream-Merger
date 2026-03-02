@@ -11,7 +11,7 @@ export default function handler(req, res) {
 
   const manifest = {
     id: 'community.unified-stream-aggregator',
-    version: '1.0.1',
+    version: '1.0.2',
     name: 'Unified Stream',
     description:
       'Aggregates streams from multiple Stremio addons in parallel. ' +
