@@ -1307,7 +1307,7 @@ function App() {
   // --- Stream preview ---
   useEffect(() => {
     setPreview({ status: 'idle', count: 0, error: '' });
-  }, [configB64]);
+  }, [configB64, previewId]);
 
   const runPreview = async () => {
     if (window.location.protocol === 'file:') return;

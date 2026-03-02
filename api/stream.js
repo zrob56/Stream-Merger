@@ -243,7 +243,7 @@ const CODEC_TAGS = [
 const AUDIO_TAGS = [
   [/\batmos\b/i,                'Atmos'],
   [/\btruehd\b/i,               'TrueHD'],
-  [/\bdd\+|ddp|eac[- ]?3\b/i,  'DD+'],
+  [/\bdd\+|\bddp\b|\beac[- ]?3\b/i, 'DD+'],
   [/\bdts[- ]?hd\b/i,          'DTS-HD'],
   [/\bdts\b/i,                  'DTS'],
   [/\baac\b/i,                  'AAC'],
@@ -253,6 +253,8 @@ const HDR_LABELS    = HDR_TAGS.map(([, label]) => label);   // ['DV','HDR10+','H
 const CODEC_LABELS  = CODEC_TAGS.map(([, label]) => label); // ['AV1','x265','x264']
 const SOURCE_LABELS = SOURCE_TAGS.map(([, label]) => label); // ['Remux','BluRay','WEB-DL','WEBRip','HDTV','DVD']
 const AUDIO_LABELS  = AUDIO_TAGS.map(([, label]) => label);  // ['Atmos','TrueHD','DD+','DTS-HD','DTS','AAC']
+
+const ALL_TAGS = [...SOURCE_TAGS, ...HDR_TAGS, ...CODEC_TAGS, ...AUDIO_TAGS];
 
 const DIVERSITY_SOURCE_PRIORITY = ['Remux', 'BluRay', 'WEB-DL', 'WEBRip', 'HDTV', 'DVD'];
 const DIVERSITY_HDR_PRIORITY    = ['DV', 'HDR10+', 'HDR10', 'HDR', 'HLG'];
@@ -290,7 +292,7 @@ function extractSeeders(stream) {
 function extractQualityTags(stream) {
   const haystack = `${stream.name ?? ''} ${stream.title ?? ''}`;
   const tags = [];
-  for (const [re, label] of [...SOURCE_TAGS, ...HDR_TAGS, ...CODEC_TAGS, ...AUDIO_TAGS]) {
+  for (const [re, label] of ALL_TAGS) {
     if (re.test(haystack)) tags.push(label);
   }
   return tags;
