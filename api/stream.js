@@ -2,7 +2,10 @@
 // Aggregates streams from multiple sub-addons in parallel, deduplicates,
 // sorts, filters, and normalizes bingeGroup for seamless Stremio autoplay.
 
+import { createHash } from 'crypto';
+
 const FETCH_TIMEOUT_MS = 8500;
+const SOFT_TIMEOUT_MS  = 2500;
 
 const DISPLAY_DEFAULTS = ['source', 'resolution', 'cached', 'tags', 'filename', 'seeders', 'size'];
 
@@ -438,21 +441,27 @@ function applyFilters(streams, filters) {
  * @returns {object[]}
  */
 function deduplicateStreams(streams) {
-  const seen = new Set();
+  const seen   = new Map(); // normalized key → index in result[]
   const result = [];
 
   for (const stream of streams) {
     const key = stream.infoHash
       ? (stream.infoHash + (stream.fileIdx != null ? ':' + stream.fileIdx : ''))
       : (stream.url ?? null);
-    if (!key) {
-      result.push(stream);
-      continue;
-    }
+    if (!key) { result.push(stream); continue; }
+
     const normalized = key.toLowerCase();
     if (!seen.has(normalized)) {
-      seen.add(normalized);
-      result.push(stream);
+      seen.set(normalized, result.length);
+      const srcName = (stream.name ?? '').split('\n')[0].trim();
+      result.push({ ...stream, _sources: srcName ? [srcName] : [] });
+    } else {
+      // Merge duplicate's source name into the kept stream
+      const dupSrc = (stream.name ?? '').split('\n')[0].trim();
+      if (dupSrc) {
+        const kept = result[seen.get(normalized)];
+        if (!kept._sources.includes(dupSrc)) kept._sources.push(dupSrc);
+      }
     }
   }
 
@@ -566,7 +575,9 @@ function formatStreamDisplay(streams, display) {
     const nameParts = [];
 
     if (show.has('source')) {
-      const src = (stream.name ?? '').split('\n')[0].trim();
+      const src = stream._sources?.length
+        ? stream._sources.join(' + ')
+        : (stream.name ?? '').split('\n')[0].trim();
       if (src) nameParts.push(src);
     }
     if (show.has('resolution')) {
@@ -629,8 +640,9 @@ export default async function handler(req, res) {
   }
 
   // Redis cache check
-  const redis    = await getRedis();
-  const cacheKey = `streams:${rawConfig}:${type}:${rawId}`;
+  const redis      = await getRedis();
+  const configHash = createHash('sha256').update(rawConfig).digest('hex');
+  const cacheKey   = `streams:${configHash}:${type}:${rawId}`;
   const cacheTtl = season ? 300 : 900; // 5 min episodes, 15 min movies
 
   if (redis) {
@@ -656,7 +668,29 @@ export default async function handler(req, res) {
     return fetchWithTimeout(streamUrl, timeout);
   });
 
-  const results = await Promise.allSettled(fetchPromises);
+  // Soft timeout: if any addon responds within SOFT_TIMEOUT_MS, proceed early
+  // rather than waiting up to FETCH_TIMEOUT_MS for the slowest addon.
+  const settledResults = new Array(addons.length).fill(null);
+  const trackedPromises = fetchPromises.map((p, i) =>
+    p.then(
+      value  => { settledResults[i] = { status: 'fulfilled', value };  return value; },
+      reason => { settledResults[i] = { status: 'rejected',  reason }; throw reason; }
+    )
+  );
+
+  const results = await Promise.race([
+    Promise.allSettled(trackedPromises),
+    new Promise(resolve => {
+      setTimeout(() => {
+        if (settledResults.some(r => r?.status === 'fulfilled')) {
+          resolve(settledResults.map((r, i) =>
+            r ?? { status: 'rejected', reason: new Error(`Soft timeout (addon ${i})`) }
+          ));
+        }
+        // No results yet — let Promise.allSettled win instead
+      }, SOFT_TIMEOUT_MS);
+    }),
+  ]);
 
   // Collect streams from successful responses only
   // addonCap applied here (per-addon) so each upstream is capped before merge
@@ -683,7 +717,7 @@ export default async function handler(req, res) {
   const capped     = resCap > 0 ? capByResolution(diversified, resCap) : diversified;
   const normalized = normalizeBingeGroup(capped, imdbId);
   const displayed  = formatStreamDisplay(normalized, display)
-    .map(({ _addonIdx, ...s }) => s);
+    .map(({ _addonIdx, _sources, ...s }) => s);
 
   // Debug: append a synthetic entry listing any failed sub-addons
   const output = displayed.slice();
