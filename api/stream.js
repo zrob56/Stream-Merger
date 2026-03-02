@@ -79,8 +79,6 @@ function parseConfig(raw) {
       requiredCodec:  (rf.requiredCodec  ?? []).filter(t => CODEC_LABELS.includes(t)),
       requiredSource: (rf.requiredSource ?? []).filter(t => SOURCE_LABELS.includes(t)),
       requiredAudio:  (rf.requiredAudio  ?? []).filter(t => AUDIO_LABELS.includes(t)),
-      requireEnglish: Boolean(rf.requireEnglish),
-      requireSubs:    Boolean(rf.requireSubs),
     };
 
     const addonTimeouts = (parsed.addonTimeouts && typeof parsed.addonTimeouts === 'object')
@@ -406,8 +404,6 @@ function applyFilters(streams, filters) {
       const detected = AUDIO_LABELS.filter(a => tags.includes(a));
       if (detected.length > 0 && !filters.requiredAudio.some(a => detected.includes(a))) return false;
     }
-    if (filters.requireEnglish && !isEnglishAudio(s)) return false;
-    if (filters.requireSubs    && !hasEmbeddedSubs(s)) return false;
     if (filters.cachedOnly && !isCachedDebrid(s)) return false;
     if (filters.minSeeders > 0 && extractSeeders(s) < filters.minSeeders) return false;
     if (filters.maxSizeGb  > 0 && extractSizeGb(s)  > filters.maxSizeGb)  return false;
@@ -583,10 +579,6 @@ function formatStreamDisplay(streams, display) {
       const t = formatTagsWithIcons(stream);
       if (t) titleParts.push(t);
     }
-    const langParts = [];
-    if (isEnglishAudio(stream))  langParts.push('🔤 ENG');
-    if (hasEmbeddedSubs(stream)) langParts.push('💬 Subs');
-    if (langParts.length) titleParts.push(langParts.join('  '));
     if (show.has('seeders')) {
       const s = extractSeeders(stream);
       if (s > 0) titleParts.push(`👤 ${s}`);
