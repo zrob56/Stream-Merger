@@ -397,23 +397,22 @@ function applyFilters(streams, filters) {
     if (filters.requiredHdr.length > 0) {
       const tags     = extractQualityTags(s);
       const detected = HDR_LABELS.filter(h => tags.includes(h));
-      // streams with no detectable HDR tag pass (unknown quality)
-      if (detected.length > 0 && !filters.requiredHdr.some(h => detected.includes(h))) return false;
+      if (!filters.requiredHdr.some(h => detected.includes(h))) return false;
     }
     if (filters.requiredCodec.length > 0) {
       const tags     = extractQualityTags(s);
       const detected = CODEC_LABELS.filter(c => tags.includes(c));
-      if (detected.length > 0 && !filters.requiredCodec.some(c => detected.includes(c))) return false;
+      if (!filters.requiredCodec.some(c => detected.includes(c))) return false;
     }
     if (filters.requiredSource && filters.requiredSource.length > 0) {
       const tags     = extractQualityTags(s);
       const detected = SOURCE_LABELS.filter(src => tags.includes(src));
-      if (detected.length > 0 && !filters.requiredSource.some(src => detected.includes(src))) return false;
+      if (!filters.requiredSource.some(src => detected.includes(src))) return false;
     }
     if (filters.requiredAudio && filters.requiredAudio.length > 0) {
       const tags     = extractQualityTags(s);
       const detected = AUDIO_LABELS.filter(a => tags.includes(a));
-      if (detected.length > 0 && !filters.requiredAudio.some(a => detected.includes(a))) return false;
+      if (!filters.requiredAudio.some(a => detected.includes(a))) return false;
     }
     if (filters.cachedOnly && !isCachedDebrid(s)) return false;
     if (filters.minSeeders > 0 && extractSeeders(s) < filters.minSeeders) return false;
@@ -421,8 +420,7 @@ function applyFilters(streams, filters) {
     if (filters.minResolution) {
       const minIdx    = QUALITY_ORDER.indexOf(filters.minResolution);
       const streamIdx = QUALITY_ORDER.indexOf(extractResolution(s));
-      // 'unknown' (last index) streams pass through — may be unlabeled high-quality
-      if (streamIdx < QUALITY_ORDER.length - 1 && streamIdx > minIdx) return false;
+      if (streamIdx === QUALITY_ORDER.length - 1 || streamIdx > minIdx) return false;
     }
     return true;
   });
@@ -492,8 +490,16 @@ function capByResolution(streams, maxPerTier) {
 // Stream diversity — round-robin interleave across quality buckets
 // ---------------------------------------------------------------------------
 
+function getSizeTier(stream) {
+  const gb = extractSizeGb(stream);
+  if (gb === 0) return 'unknown';
+  if (gb <  15) return 'compact';  // <15 GB  — 720p / small WEB-DL
+  if (gb <  50) return 'mid';      // 15–50 GB — 4K WEB-DL, 1080p Remux
+  return 'full';                    // ≥50 GB  — 4K Remux
+}
+
 /**
- * Interleaves streams across quality buckets keyed by {resolution}|{source}|{hdr},
+ * Interleaves streams across quality buckets keyed by {resolution}|{source}|{hdr}|{size},
  * ensuring variety before any one bucket dominates the results.
  * Bucket order is insertion-order from the sorted input, so the highest-quality
  * bucket always leads each round.
@@ -510,7 +516,8 @@ function diversifyStreams(streams) {
     const tags = extractQualityTags(stream);
     const src  = DIVERSITY_SOURCE_PRIORITY.find(t => tags.includes(t)) ?? 'other';
     const hdr  = DIVERSITY_HDR_PRIORITY.find(t => tags.includes(t))    ?? 'SDR';
-    const key  = `${res}|${src}|${hdr}`;
+    const size = getSizeTier(stream);
+    const key  = `${res}|${src}|${hdr}|${size}`;
     if (!buckets.has(key)) { buckets.set(key, []); bucketOrder.push(key); }
     buckets.get(key).push(stream);
   }
