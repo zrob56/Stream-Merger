@@ -696,7 +696,11 @@ export default async function handler(req, res) {
       const streams = result.value?.streams;
       if (Array.isArray(streams)) {
         const slice = addonCap > 0 ? streams.slice(0, addonCap) : streams;
-        allStreams.push(...slice.map(s => ({ ...s, _addonIdx: i })));
+        allStreams.push(...slice.map(s => ({
+          ...s,
+          _addonIdx: i,
+          title: s.title || s.description || '',
+        })));
       }
     }
   }
