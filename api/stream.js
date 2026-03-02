@@ -2,7 +2,7 @@
 // Aggregates streams from multiple sub-addons in parallel, deduplicates,
 // sorts, filters, and normalizes bingeGroup for seamless Stremio autoplay.
 
-const FETCH_TIMEOUT_MS = 7000;
+const FETCH_TIMEOUT_MS = 6000;
 
 const DISPLAY_DEFAULTS = ['source', 'resolution', 'cached', 'tags', 'filename', 'seeders', 'size'];
 
@@ -162,6 +162,8 @@ function fetchWithTimeout(url, timeoutMs = FETCH_TIMEOUT_MS) {
   return fetch(url, { signal: controller.signal })
     .then((res) => {
       if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
+      const ct = res.headers.get('content-type') ?? '';
+      if (!ct.includes('application/json')) throw new Error(`Non-JSON response (offline/HTML) from ${url}`);
       return res.json();
     })
     .finally(() => clearTimeout(timer));
@@ -433,7 +435,9 @@ function deduplicateStreams(streams) {
   const result = [];
 
   for (const stream of streams) {
-    const key = stream.infoHash ?? stream.url ?? null;
+    const key = stream.infoHash
+      ? (stream.infoHash + (stream.fileIdx != null ? ':' + stream.fileIdx : ''))
+      : (stream.url ?? null);
     if (!key) {
       result.push(stream);
       continue;
@@ -601,6 +605,7 @@ function formatStreamDisplay(streams, display) {
 // ---------------------------------------------------------------------------
 
 export default async function handler(req, res) {
+  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
   const { config: rawConfig, type, id: rawId } = req.query;
 
   if (!rawConfig || !type || !rawId) {

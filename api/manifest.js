@@ -4,6 +4,7 @@
 // are intentionally omitted so Stremio falls back to Cinemeta/Trakt.
 
 export default function handler(req, res) {
+  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
   const proto = (req.headers['x-forwarded-proto'] ?? 'https').split(',')[0].trim();
   const host  = req.headers.host ?? '';
   const logo  = host ? `${proto}://${host}/logo.svg` : '';

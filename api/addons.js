@@ -4,7 +4,7 @@
 // Edge-cached for 1 hour (registry changes rarely).
 
 const REGISTRY_URL = 'https://stremio-addons.com/catalog.json';
-const FETCH_TIMEOUT_MS = 10000;
+const FETCH_TIMEOUT_MS = 8000;
 
 function deriveConfigUrl(entry) {
   const hints = entry?.manifest?.behaviorHints;
@@ -17,6 +17,7 @@ function deriveConfigUrl(entry) {
 }
 
 export default async function handler(req, res) {
+  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
   res.setHeader('Access-Control-Allow-Origin', '*');
 
   const controller = new AbortController();

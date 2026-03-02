@@ -67,6 +67,13 @@ const DEFAULT_DISPLAY = ['source', 'resolution', 'cached', 'tags', 'filename', '
 
 const DEFAULT_FILTERS = { cachedOnly: false, minSeeders: 0, maxSizeGb: 0, minResolution: '', excludeTerms: [], requiredHdr: [], requiredSource: [], requiredAudio: [] };
 
+const PREVIEW_OPTIONS = [
+  { label: 'The Dark Knight',       value: 'tt0468569:movie'  },
+  { label: 'Breaking Bad S1E1',     value: 'tt0903747:series', id: 'tt0903747:1:1' },
+  { label: 'Attack on Titan S1E1',  value: 'tt2560140:series', id: 'tt2560140:1:1' },
+  { label: 'Interstellar',          value: 'tt0816692:movie'  },
+];
+
 const HDR_PILL_OPTIONS    = ['DV', 'HDR10+', 'HDR10', 'HDR', 'HLG'];
 const SOURCE_PILL_OPTIONS = ['Remux', 'BluRay', 'WEB-DL', 'WEBRip', 'HDTV', 'DVD'];
 const AUDIO_PILL_OPTIONS  = ['Atmos', 'TrueHD', 'DD+', 'DTS-HD', 'DTS', 'AAC'];
@@ -128,7 +135,10 @@ function buildConfig(addons, sort, display, { limit, resCap, addonCap, debug, di
 }
 
 function toBase64Url(str) {
-  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  const bytes = new TextEncoder().encode(str);
+  let binary = '';
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
 function buildManifestUrl(base, config) {
@@ -1152,6 +1162,7 @@ function App() {
   const [addonTimeouts,  setAddonTimeouts]  = useState(() => _live?.addonTimeouts  ?? {});
   const [addonHealth,    setAddonHealth]    = useState({});
   const [preview,        setPreview]        = useState({ status: 'idle', count: 0, error: '' });
+  const [previewId,      setPreviewId]      = useState('tt0468569:movie');
 
   // Saved presets (localStorage-backed)
   const [savedPresets, setSavedPresets] = useState(() => {
@@ -1302,7 +1313,10 @@ function App() {
     if (window.location.protocol === 'file:') return;
     setPreview({ status: 'loading', count: 0, error: '' });
     try {
-      const url = `/api/stream?config=${configB64}&type=movie&id=tt0468569`;
+      const opt  = PREVIEW_OPTIONS.find(o => o.value === previewId) ?? PREVIEW_OPTIONS[0];
+      const type = opt.value.split(':')[1];
+      const id   = opt.id ?? opt.value.split(':')[0];
+      const url  = `/api/stream?config=${configB64}&type=${type}&id=${id}`;
       const r = await fetch(url);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
@@ -1468,13 +1482,24 @@ function App() {
 
             {/* Stream count preview */}
             <div className="flex items-center gap-3 flex-wrap">
-              <button
-                onClick={runPreview}
-                disabled={!isReady || window.location.protocol === 'file:' || preview.status === 'loading'}
-                className="px-3 py-1.5 rounded border border-border text-xs text-zinc-400 hover:border-zinc-400 hover:text-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition"
-              >
-                {preview.status === 'loading' ? 'Loading…' : 'Preview streams'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={runPreview}
+                  disabled={!isReady || window.location.protocol === 'file:' || preview.status === 'loading'}
+                  className="px-3 py-1.5 rounded border border-border text-xs text-zinc-400 hover:border-zinc-400 hover:text-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                >
+                  {preview.status === 'loading' ? 'Loading…' : 'Preview streams'}
+                </button>
+                <select
+                  value={previewId}
+                  onChange={e => setPreviewId(e.target.value)}
+                  className="border border-border text-zinc-300 bg-surface text-sm rounded px-2 py-1"
+                >
+                  {PREVIEW_OPTIONS.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
               {preview.status === 'ok' && (
                 <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
                   {preview.count} stream{preview.count !== 1 ? 's' : ''}
