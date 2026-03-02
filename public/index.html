@@ -152,7 +152,7 @@ function isValidUrl(str) {
 
 // Normalize a manifest URL into a transport URL (strip /manifest.json suffix).
 function toTransportUrl(url) {
-  return url.replace(/\/manifest\.json$/, '');
+  return url.replace(/^stremio:\/\//, 'https://').replace(/\/manifest\.json$/, '');
 }
 
 // ---------------------------------------------------------------------------
@@ -573,7 +573,7 @@ function DebridQuickAdd({ onAdd }) {
   const [key, setKey]         = useState('');
   const [showKey, setShowKey] = useState(false);
   const [addons, setAddons]       = useState({ torrentio: true, comet: true, mediafusion: true, stremthru: false });
-  const [stremthruHost, setStremthruHost] = useState('');
+  const [stremthruHost, setStremthruHost] = useState('stremthru.13377001.xyz');
   const [flash, setFlash]     = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -709,7 +709,7 @@ function DebridQuickAdd({ onAdd }) {
               type="text"
               value={stremthruHost}
               onChange={(e) => setStremthruHost(e.target.value)}
-              placeholder="StremThru host (e.g. stremthru.13377001.xyz)"
+              placeholder="StremThru host"
               className="w-full bg-surface border border-border rounded px-3 py-2 text-sm text-zinc-100
                          outline-none focus:border-accent focus:ring-1 focus:ring-accent transition"
               spellCheck={false}
