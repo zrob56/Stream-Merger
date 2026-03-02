@@ -593,14 +593,14 @@ function DebridQuickAdd({ onAdd }) {
       });
     }
     if (addons.comet) {
-      const cfg = btoa(JSON.stringify({ debridServices: [{ service, apiKey: key }] }));
+      const cfg = toBase64Url(JSON.stringify({ debridServices: [{ service, apiKey: key }] }));
       urls.push({
         url:  `https://comet.elfhosted.com/${cfg}/manifest.json`,
         name: `Comet (${abbr})`,
       });
     }
     if (addons.jackettio) {
-      const cfg = btoa(JSON.stringify({ debridId: service, debridApiKey: key }));
+      const cfg = toBase64Url(JSON.stringify({ debridId: service, debridApiKey: key }));
       urls.push({
         url:  `https://jackettio.elfhosted.com/${cfg}/manifest.json`,
         name: `Jackettio (${abbr})`,
@@ -610,14 +610,15 @@ function DebridQuickAdd({ onAdd }) {
       urls.push({ url: `https://knightcrawler.elfhosted.com/${service}=${key}/manifest.json`, name: `KnightCrawler (${abbr})` });
     }
     if (addons.annatar) {
-      urls.push({ url: `https://annatar.elfhosted.com/${service}=${key}/manifest.json`, name: `Annatar (${abbr})` });
+      const annatarCfg = toBase64Url(JSON.stringify({ debrid_service: service, debrid_api_key: key }));
+      urls.push({ url: `https://annatar.elfhosted.com/${annatarCfg}/manifest.json`, name: `Annatar (${abbr})` });
     }
     if (addons.mediafusion) {
       const mfServiceMap = { realdebrid: 'realdebrid', torbox: 'torbox', alldebrid: 'alldebrid', debridlink: 'debridlink', premiumize: 'premiumize' };
       const provider = mfServiceMap[service];
       if (provider) {
         const cfgObj = { streamingProviders: { [provider]: { token: key } } };
-        urls.push({ url: `https://mediafusion.elfhosted.com/${btoa(JSON.stringify(cfgObj))}/manifest.json`, name: `MediaFusion (${abbr})` });
+        urls.push({ url: `https://mediafusion.elfhosted.com/${toBase64Url(JSON.stringify(cfgObj))}/manifest.json`, name: `MediaFusion (${abbr})` });
       }
     }
     if (addons.stremthru) {

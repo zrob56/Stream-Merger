@@ -2,7 +2,7 @@
 // Aggregates streams from multiple sub-addons in parallel, deduplicates,
 // sorts, filters, and normalizes bingeGroup for seamless Stremio autoplay.
 
-const FETCH_TIMEOUT_MS = 6000;
+const FETCH_TIMEOUT_MS = 8500;
 
 const DISPLAY_DEFAULTS = ['source', 'resolution', 'cached', 'tags', 'filename', 'seeders', 'size'];
 
@@ -159,7 +159,12 @@ function fetchWithTimeout(url, timeoutMs = FETCH_TIMEOUT_MS) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  return fetch(url, { signal: controller.signal })
+  return fetch(url, {
+    signal: controller.signal,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Stremio/4.4.168'
+    }
+  })
     .then((res) => {
       if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
       const ct = res.headers.get('content-type') ?? '';
