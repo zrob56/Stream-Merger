@@ -731,11 +731,9 @@ export default async function handler(req, res) {
       const { infoHash, fileIdx, sources, ...rest } = s;
       clean = rest;
     }
-    // Mirror title → description for Stremio v5 only when the addon didn't already set one
-    if (!clean.description && clean.title) {
-      return { ...clean, description: clean.title };
-    }
-    return clean;
+    // Always mirror title → description; Stremio v5 prioritises description in its UI.
+    // Preserve addon-provided description if it exists, otherwise use formatted title.
+    return { ...clean, description: clean.description ?? clean.title ?? '' };
   });
 
   // Apply limit to real streams BEFORE debug so the debug entry always appears last
