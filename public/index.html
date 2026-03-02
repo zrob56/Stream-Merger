@@ -572,8 +572,9 @@ function DebridQuickAdd({ onAdd }) {
   const [service, setService] = useState('realdebrid');
   const [key, setKey]         = useState('');
   const [showKey, setShowKey] = useState(false);
-  const [addons, setAddons]   = useState({ torrentio: true, comet: true, knightcrawler: true, annatar: false, mediafusion: false, stremthru: false });
+  const [addons, setAddons]   = useState({ torrentio: true, comet: true, mediafusion: true });
   const [flash, setFlash]     = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const SERVICES = [
     ['realdebrid', 'Real-Debrid', 'RD'],
@@ -583,7 +584,7 @@ function DebridQuickAdd({ onAdd }) {
     ['premiumize', 'Premiumize',  'PM'],
   ];
 
-  const buildUrls = () => {
+  const buildUrls = async () => {
     const abbr = SERVICES.find(([id]) => id === service)[2];
     const urls = [];
     if (addons.torrentio) {
@@ -593,30 +594,32 @@ function DebridQuickAdd({ onAdd }) {
       const cfg = btoa(JSON.stringify({ debridServices: [{ service, apiKey: key }] }));
       urls.push({ url: `https://comet.elfhosted.com/${cfg}/manifest.json`, name: `Comet (${abbr})` });
     }
-    if (addons.knightcrawler) {
-      urls.push({ url: `https://knightcrawler.elfhosted.com/${service}=${key}/manifest.json`, name: `KnightCrawler (${abbr})` });
-    }
-    if (addons.annatar) {
-      urls.push({ url: `https://annatar.elfhosted.com/${service}=${key}/manifest.json`, name: `Annatar (${abbr})` });
-    }
     if (addons.mediafusion) {
-      const mfServiceMap = { realdebrid: 'realdebrid', torbox: 'torbox', alldebrid: 'alldebrid', debridlink: 'debridlink', premiumize: 'premiumize' };
-      const provider = mfServiceMap[service];
-      if (provider) {
-        const cfgObj = { streamingProviders: { [provider]: { token: key } } };
-        urls.push({ url: `https://mediafusion.elfhosted.com/${btoa(JSON.stringify(cfgObj))}/manifest.json`, name: `MediaFusion (${abbr})` });
+      try {
+        const res = await fetch('https://mediafusion.elfhosted.com/encrypt-user-data', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ streaming_providers: [{ service, token: key }] }),
+        });
+        const data = await res.json();
+        const secretStr = data.secret_str;
+        if (secretStr) {
+          urls.push({ url: `https://mediafusion.elfhosted.com/${secretStr}/manifest.json`, name: `MediaFusion (${abbr})` });
+        }
+      } catch (e) {
+        console.error('MediaFusion encrypt failed:', e);
       }
-    }
-    if (addons.stremthru) {
-      urls.push({ url: `https://stremthru.elfhosted.com/stremio/${service}=${key}/manifest.json`, name: `StremThru (${abbr})` });
     }
     return urls;
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     const trimmed = key.trim();
-    if (!trimmed || !Object.values(addons).some(Boolean)) return;
-    buildUrls().forEach(({ url, name }) => onAdd(url, name));
+    if (!trimmed || !Object.values(addons).some(Boolean) || loading) return;
+    setLoading(true);
+    const urls = await buildUrls();
+    urls.forEach(({ url, name }) => onAdd(url, name));
+    setLoading(false);
     setFlash(true);
     setTimeout(() => setFlash(false), 2000);
   };
@@ -655,7 +658,7 @@ function DebridQuickAdd({ onAdd }) {
               type={showKey ? 'text' : 'password'}
               value={key}
               onChange={(e) => setKey(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+              onKeyDown={(e) => e.key === 'Enter' && !loading && handleAdd()}
               placeholder="Paste API key…"
               className="flex-1 bg-surface border border-border rounded px-3 py-2 text-sm text-zinc-100
                          outline-none focus:border-accent focus:ring-1 focus:ring-accent transition"
@@ -674,12 +677,9 @@ function DebridQuickAdd({ onAdd }) {
           {/* Addon checkboxes */}
           <div className="flex gap-4">
             {[
-              ['torrentio',     'Torrentio'],
-              ['comet',         'Comet'],
-              ['knightcrawler', 'KnightCrawler'],
-              ['annatar',       'Annatar'],
-              ['mediafusion',   'MediaFusion'],
-              ['stremthru',     'StremThru'],
+              ['torrentio',   'Torrentio'],
+              ['comet',       'Comet'],
+              ['mediafusion', 'MediaFusion'],
             ].map(([id, label]) => (
               <label key={id} className="flex items-center gap-1.5 cursor-pointer select-none text-sm text-zinc-300">
                 <input
@@ -697,11 +697,11 @@ function DebridQuickAdd({ onAdd }) {
           <div className="flex items-center gap-3">
             <button
               onClick={handleAdd}
-              disabled={!key.trim() || !Object.values(addons).some(Boolean)}
+              disabled={!key.trim() || !Object.values(addons).some(Boolean) || loading}
               className="px-4 py-1.5 rounded border border-accent text-accent text-sm
                          hover:bg-accent hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition"
             >
-              Add Addons
+              {loading ? 'Adding…' : 'Add Addons'}
             </button>
             {flash && <span className="text-xs text-green-400">Added!</span>}
           </div>
