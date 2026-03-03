@@ -5,7 +5,7 @@
 import { createHash } from 'crypto';
 import {
   parseConfig, parseId, buildStreamUrl, fetchWithTimeout,
-  isCachedDebrid, extractSeeders, extractSizeGb, extractResolution,
+  isCachedDebrid, extractSeeders, extractSizeGb, extractResolution, extractEpisodes,
   QUALITY_ORDER, FETCH_TIMEOUT_MS,
 } from './utils/parse.js';
 import { sortStreams } from './utils/sort.js';
@@ -140,12 +140,19 @@ export default async function handler(req, res) {
     }
   }
 
-  // Folder popup fix: for series, drop torrents without a specific file index.
-  // Season packs without fileIdx cause Stremio to show a folder-picker popup.
+  // Folder popup fix & strict episode matching for series
   if (type === 'series') {
-    allStreams = allStreams.filter(s =>
-      !(s.infoHash && s.fileIdx == null && s.fileIndex == null)
-    );
+    const reqEp = parseInt(episode, 10);
+    allStreams = allStreams.filter(s => {
+      // 1. Drop infoHash season packs without a specific file index
+      if (s.infoHash && s.fileIdx == null && s.fileIndex == null) return false;
+      // 2. Strict episode parsing to block bleeding from other episodes
+      const eps = extractEpisodes(s);
+      if (eps.length > 0 && !eps.includes(reqEp)) return false;
+      // 3. Drop massive unresolved proxy packs (No infoHash + No Ep Number + >20GB)
+      if (!s.infoHash && eps.length === 0 && extractSizeGb(s) > 20) return false;
+      return true;
+    });
   }
 
   // --- Consolidation pipeline ---
