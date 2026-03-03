@@ -6,6 +6,19 @@ import {
   extractSeeders, extractSizeGb, RESOLUTION_ICONS,
 } from './parse.js';
 
+// Map of hostname substrings → clean display names (checked in order, first match wins)
+const ADDON_NAME_MAP = [
+  ['stremthru',      'StremThru'],
+  ['torrentsdb',     'TorrentsDB'],
+  ['torrentio',      'Torrentio'],
+  ['comet',          'Comet'],
+  ['mediafusion',    'MediaFusion'],
+  ['jackettio',      'Jackettio'],
+  ['knightcrawler',  'KnightCrawler'],
+  ['annatar',        'Annatar'],
+  ['elfhosted',      'ElfHosted'],
+];
+
 // ---------------------------------------------------------------------------
 // BingeGroup normalization — the autoplay fix
 // ---------------------------------------------------------------------------
@@ -52,10 +65,26 @@ export function formatStreamDisplay(streams, display) {
     if (show.has('source')) {
       const rawName   = (stream.name ?? '').split('\n')[0].trim();
       const cleanName = rawName.replace(/\[.*?\]/g, '').trim();
-      let src = cleanName;
+      // Also treat bare resolution strings as "no useful name"
+      const isGeneric = /^(4k|2160p|1080p|720p|480p|360p|sd|hd|unknown)$/i.test(cleanName);
+      let src = isGeneric ? '' : cleanName;
+
       if (!src && stream._addonUrl) {
-        try { src = new URL(stream._addonUrl).hostname; } catch { src = stream._addonUrl; }
+        try {
+          const host = new URL(stream._addonUrl).hostname.toLowerCase();
+          const match = ADDON_NAME_MAP.find(([sub]) => host.includes(sub));
+          if (match) {
+            src = match[1];
+          } else {
+            // Generic: capitalize first label of hostname (strip www. prefix first)
+            const first = host.replace(/^www\./, '').split('.')[0];
+            src = first.charAt(0).toUpperCase() + first.slice(1);
+          }
+        } catch {
+          src = stream._addonUrl;
+        }
       }
+
       if (src) nameParts.push(src);
     }
     if (show.has('resolution')) {
