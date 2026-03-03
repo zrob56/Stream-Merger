@@ -574,7 +574,8 @@ function DebridQuickAdd({ onAdd }) {
   const [service, setService] = useState('realdebrid');
   const [key, setKey]         = useState('');
   const [showKey, setShowKey] = useState(false);
-  const [addons, setAddons]       = useState({ torrentio: true, comet: true, mediafusion: true, stremthru: false, torrentsdb: false });
+  const [addons, setAddons]       = useState({ torrentio: true, comet: true, mediafusion: true, stremthru: false, peerflix: true });
+  const [cachedOnlyLinks, setCachedOnlyLinks] = useState(true);
   const [stremthruHost, setStremthruHost] = useState('stremthru.13377001.xyz');
   const [flash, setFlash]     = useState(false);
   const [loading, setLoading] = useState(false);
@@ -595,18 +596,23 @@ function DebridQuickAdd({ onAdd }) {
     const abbr = SERVICES.find(([id]) => id === service)[2];
     const urls = [];
     if (addons.torrentio) {
-      urls.push({ url: `https://torrentio.strem.fun/${service}=${key}/manifest.json`, name: `Torrentio (${abbr})` });
+      const debridStr = cachedOnlyLinks ? `debridoptions=nodownloadlinks|${service}=${key}` : `${service}=${key}`;
+      urls.push({ url: `https://torrentio.strem.fun/${debridStr}/manifest.json`, name: `Torrentio (${abbr})` });
     }
     if (addons.comet) {
-      const cfg = btoa(JSON.stringify({ debridServices: [{ service, apiKey: key }] }));
+      const payload = { debridServices: [{ service, apiKey: key }] };
+      if (cachedOnlyLinks) payload.cachedOnly = true;
+      const cfg = btoa(JSON.stringify(payload));
       urls.push({ url: `https://comet.elfhosted.com/${cfg}/manifest.json`, name: `Comet (${abbr})` });
     }
     if (addons.mediafusion) {
       try {
+        const payload = { streaming_providers: [{ service, token: key }] };
+        if (cachedOnlyLinks) payload.disable_uncached = true;
         const res = await fetch('https://mediafusion.elfhosted.com/encrypt-user-data', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ streaming_providers: [{ service, token: key }] }),
+          body: JSON.stringify(payload),
         });
         const data = await res.json();
         const encryptedStr = data.encrypted_str;
@@ -620,12 +626,14 @@ function DebridQuickAdd({ onAdd }) {
     if (addons.stremthru && stremthruHost.trim()) {
       const host = stremthruHost.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
       const code = STREMTHRU_STORE_CODES[service] ?? service;
-      const cfg  = btoa(JSON.stringify({ indexers: null, stores: [{ c: code, t: key }] }));
+      const stPayload = { indexers: null, stores: [{ c: code, t: key }] };
+      if (cachedOnlyLinks) stPayload.cached = true;
+      const cfg = btoa(JSON.stringify(stPayload));
       urls.push({ url: `https://${host}/stremio/torz/${cfg}/manifest.json`, name: `StremThru (${abbr})` });
     }
-    if (addons.torrentsdb) {
-      const cfg = btoa(JSON.stringify({ [service]: key }));
-      urls.push({ url: `https://torrentsdb.com/${cfg}/manifest.json`, name: `TorrentsDB (${abbr})` });
+    if (addons.peerflix) {
+      const prefix = cachedOnlyLinks ? 'debridoptions=nodownloadlinks|' : '';
+      urls.push({ url: `https://addon.peerflix.mov/language=en|${prefix}${service}=${key}/manifest.json`, name: `Peerflix (${abbr})` });
     }
     return urls;
   };
@@ -698,7 +706,7 @@ function DebridQuickAdd({ onAdd }) {
               ['comet',       'Comet'],
               ['mediafusion', 'MediaFusion'],
               ['stremthru',   'StremThru'],
-              ['torrentsdb',  'TorrentsDB'],
+              ['peerflix',    'Peerflix'],
             ].map(([id, label]) => (
               <label key={id} className="flex items-center gap-1.5 cursor-pointer select-none text-sm text-zinc-300">
                 <input
@@ -722,6 +730,12 @@ function DebridQuickAdd({ onAdd }) {
               spellCheck={false}
             />
           )}
+
+          {/* Cached-only toggle */}
+          <label className="flex items-center gap-2 mb-3 cursor-pointer select-none text-xs text-emerald-400 border border-emerald-900/30 bg-emerald-500/5 p-2 rounded">
+            <input type="checkbox" checked={cachedOnlyLinks} onChange={e => setCachedOnlyLinks(e.target.checked)} className="w-3.5 h-3.5 accent-emerald-500" />
+            Force "Cached Only" (removes buffering P2P links)
+          </label>
 
           {/* Submit */}
           <div className="flex items-center gap-3">
