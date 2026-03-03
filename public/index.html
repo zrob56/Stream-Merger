@@ -111,7 +111,7 @@ const PRESETS = [
 // Utilities
 // ---------------------------------------------------------------------------
 
-function buildConfig(addons, sort, display, { limit, tierTop, tierBalanced, tierEfficient, addonCap, debug, filters, addonTimeouts }) {
+function buildConfig(addons, sort, display, { limit, tierTop, tierBalanced, tierEfficient, addonCap, debug, trustProxies, filters, addonTimeouts }) {
   const payload = { addons: addons.filter(Boolean) };
   if (JSON.stringify(sort) !== JSON.stringify(DEFAULT_SORT)) payload.sort = sort;
   if (JSON.stringify(display) !== JSON.stringify(DEFAULT_DISPLAY)) payload.display = display;
@@ -121,6 +121,7 @@ function buildConfig(addons, sort, display, { limit, tierTop, tierBalanced, tier
   if (tierEfficient > 0) payload.tierEfficient = tierEfficient;
   if (addonCap > 0) payload.addonCap = addonCap;
   if (debug)        payload.debug    = true;
+  if (trustProxies) payload.trustProxies = true;
   if (filters.cachedOnly || filters.minSeeders > 0 || filters.maxSizeGb > 0 || filters.minResolution
       || filters.excludeTerms.length > 0 || filters.requiredHdr.length > 0
       || filters.requiredSource.length > 0 || filters.requiredAudio.length > 0) {
@@ -834,7 +835,7 @@ function NumInput({ value, onChange, min = 0, step = 1, placeholder = '0', width
 // Filters & Limits section
 // ---------------------------------------------------------------------------
 
-function FiltersSection({ filters, setFilters, limit, setLimit, tierTop, setTierTop, tierBalanced, setTierBalanced, tierEfficient, setTierEfficient, addonCap, setAddonCap, debug, setDebug }) {
+function FiltersSection({ filters, setFilters, limit, setLimit, tierTop, setTierTop, tierBalanced, setTierBalanced, tierEfficient, setTierEfficient, addonCap, setAddonCap, debug, setDebug, trustProxies, setTrustProxies }) {
   const [termInput, setTermInput] = useState('');
 
   const Row = ({ children }) => (
@@ -874,6 +875,14 @@ function FiltersSection({ filters, setFilters, limit, setLimit, tierTop, setTier
 
   return (
     <div className="space-y-1">
+      <label className="flex items-start gap-3 p-2.5 rounded border border-emerald-900 bg-emerald-900/10 cursor-pointer hover:border-emerald-500/50 transition select-none">
+        <input type="checkbox" checked={trustProxies} onChange={e => setTrustProxies(e.target.checked)} className="w-4 h-4 shrink-0 accent-emerald-500 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-emerald-400">Trust addon caches (Bypass Proxy Trap)</p>
+          <p className="text-xs text-zinc-400 mt-1">Enable ONLY if your proxy addons are explicitly set to "Cached Only".</p>
+        </div>
+      </label>
+
       {/* Cached only */}
       <label className="flex items-center gap-3 p-2.5 rounded border border-border bg-panel
                         cursor-pointer hover:border-zinc-500 transition select-none">
@@ -1152,6 +1161,7 @@ function loadLiveState() {
       tierEfficient: typeof s.tierEfficient === 'number' ? s.tierEfficient : 0,
       addonCap:      typeof s.addonCap      === 'number' ? s.addonCap      : 0,
       debug:         Boolean(s.debug),
+      trustProxies:  Boolean(s.trustProxies),
       filters:       (s.filters && typeof s.filters === 'object') ? { ...DEFAULT_FILTERS, ...s.filters } : DEFAULT_FILTERS,
       addonTimeouts: (s.addonTimeouts && typeof s.addonTimeouts === 'object') ? s.addonTimeouts : {},
     };
@@ -1179,6 +1189,7 @@ function App() {
   const [tierEfficient,  setTierEfficient]  = useState(() => _live?.tierEfficient  ?? 0);
   const [addonCap,       setAddonCap]       = useState(() => _live?.addonCap       ?? 0);
   const [debug,          setDebug]          = useState(() => _live?.debug          ?? false);
+  const [trustProxies,   setTrustProxies]   = useState(() => _live?.trustProxies   ?? false);
   const [filters,        setFilters]        = useState(() => _live?.filters        ?? DEFAULT_FILTERS);
   const [addonTimeouts,  setAddonTimeouts]  = useState(() => _live?.addonTimeouts  ?? {});
   const [addonHealth,    setAddonHealth]    = useState({});
@@ -1199,10 +1210,10 @@ function App() {
   useEffect(() => {
     try {
       localStorage.setItem('us_live', JSON.stringify({
-        selected, sort, display, limit, tierTop, tierBalanced, tierEfficient, addonCap, debug, filters, addonTimeouts,
+        selected, sort, display, limit, tierTop, tierBalanced, tierEfficient, addonCap, debug, trustProxies, filters, addonTimeouts,
       }));
     } catch { /* storage full / private mode */ }
-  }, [selected, sort, display, limit, tierTop, tierBalanced, tierEfficient, addonCap, debug, filters, addonTimeouts]);
+  }, [selected, sort, display, limit, tierTop, tierBalanced, tierEfficient, addonCap, debug, trustProxies, filters, addonTimeouts]);
 
   // Set of transportUrls currently selected — for O(1) lookup in browser rows
   const selectedUrls = new Set(selected.map((a) => a.url));
@@ -1236,7 +1247,7 @@ function App() {
   });
 
   // Capture current full state for named preset saving
-  const getCurrentState = () => ({ selected, sort, display, limit, tierTop, tierBalanced, tierEfficient, addonCap, debug, filters, addonTimeouts });
+  const getCurrentState = () => ({ selected, sort, display, limit, tierTop, tierBalanced, tierEfficient, addonCap, debug, trustProxies, filters, addonTimeouts });
 
   // Load a named preset (full state replacement)
   const loadPreset = (preset) => {
@@ -1249,6 +1260,7 @@ function App() {
     setTierEfficient(preset.state.tierEfficient ?? 0);
     setAddonCap(preset.state.addonCap ?? 0);
     setDebug(preset.state.debug);
+    setTrustProxies(preset.state.trustProxies ?? false);
     setFilters(preset.state.filters);
     setAddonTimeouts(preset.state.addonTimeouts ?? {});
   };
@@ -1271,7 +1283,7 @@ function App() {
     try { localStorage.removeItem('us_live'); } catch {}
     setSelected([]); setSort(DEFAULT_SORT); setDisplay(DEFAULT_DISPLAY);
     setLimit(0); setTierTop(0); setTierBalanced(0); setTierEfficient(0); setAddonCap(0);
-    setDebug(false); setFilters(DEFAULT_FILTERS);
+    setDebug(false); setTrustProxies(false); setFilters(DEFAULT_FILTERS);
     setAddonTimeouts({}); setAddonHealth({}); setPreview({ status: 'idle', count: 0, error: '' });
   };
 
@@ -1305,6 +1317,7 @@ function App() {
         setTierEfficient(typeof s.tierEfficient === 'number' ? s.tierEfficient : 0);
         setAddonCap(typeof s.addonCap === 'number' ? s.addonCap : 0);
         setDebug(Boolean(s.debug));
+        setTrustProxies(Boolean(s.trustProxies));
         setFilters(s.filters && typeof s.filters === 'object'
           ? { ...DEFAULT_FILTERS, ...s.filters } : DEFAULT_FILTERS);
         setAddonTimeouts(s.addonTimeouts && typeof s.addonTimeouts === 'object' ? s.addonTimeouts : {});
@@ -1327,7 +1340,7 @@ function App() {
   // --- Derived values ---
   const validAddons = selected.filter((a) => a.url && isValidUrl(a.url));
   const addonUrls   = validAddons.map((a) => a.url);
-  const configB64   = buildConfig(addonUrls, sort, display, { limit, tierTop, tierBalanced, tierEfficient, addonCap, debug, filters, addonTimeouts });
+  const configB64   = buildConfig(addonUrls, sort, display, { limit, tierTop, tierBalanced, tierEfficient, addonCap, debug, trustProxies, filters, addonTimeouts });
 
   // --- Stream preview ---
   useEffect(() => {
@@ -1494,6 +1507,7 @@ function App() {
           tierEfficient={tierEfficient} setTierEfficient={setTierEfficient}
           addonCap={addonCap}           setAddonCap={setAddonCap}
           debug={debug}                 setDebug={setDebug}
+          trustProxies={trustProxies}   setTrustProxies={setTrustProxies}
         />
       </section>
 
@@ -1605,6 +1619,7 @@ function App() {
               {addonCap > 0 && (
                 <span className="px-2 py-0.5 rounded bg-panel border border-border">addon-cap: {addonCap}</span>
               )}
+              {trustProxies && <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/30 text-emerald-400">trusted</span>}
               {debug && (
                 <span className="px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/30 text-amber-400">debug</span>
               )}
@@ -1651,6 +1666,7 @@ function App() {
                     ...(tierEfficient > 0 ? { tierEfficient } : {}),
                     ...(addonCap      > 0 ? { addonCap }      : {}),
                     ...(debug            ? { debug }        : {}),
+                    ...(trustProxies ? { trustProxies } : {}),
                     ...(hasActiveFilters ? { filters } : {}),
                   },
                   null, 2

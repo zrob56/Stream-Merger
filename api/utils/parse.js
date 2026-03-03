@@ -147,8 +147,11 @@ export function getCacheTier(stream) {
     /\[(rd|ad|pm|dl|tb)\]/.test(h)
   ) return 'cached';
 
-  // Structural auto-detection: direct HTTP URL with no infoHash = debrid/direct link
+  // Structural auto-detection
   if (typeof stream.url === 'string' && !stream.infoHash && !stream.url.startsWith('magnet:')) {
+    const addon = (stream._addonName || '').toLowerCase();
+    const proxyAddons = ['torrentio', 'stremthru', 'comet', 'mediafusion', 'torrentsdb'];
+    if (proxyAddons.includes(addon) && !stream._trustProxies) return 'download';
     return 'cached';
   }
 
@@ -196,6 +199,7 @@ export function parseConfig(raw) {
     const tierEfficient = typeof parsed.tierEfficient === 'number' && parsed.tierEfficient > 0 ? Math.floor(parsed.tierEfficient) : 0;
     const addonCap      = typeof parsed.addonCap      === 'number' && parsed.addonCap      > 0 ? Math.floor(parsed.addonCap)      : 0;
     const debug        = Boolean(parsed.debug);
+    const trustProxies = Boolean(parsed.trustProxies);
 
     const rf = parsed.filters ?? {};
     const filters = {
@@ -222,14 +226,14 @@ export function parseConfig(raw) {
 
     return {
       addons: Array.isArray(parsed.addons) ? parsed.addons : [],
-      sort, display, limit, tierTop, tierBalanced, tierEfficient, addonCap, debug, filters, addonTimeouts,
+      sort, display, limit, tierTop, tierBalanced, tierEfficient, addonCap, debug, trustProxies, filters, addonTimeouts,
     };
   } catch {
     return {
       addons: [],
       sort:    ['cached', 'resolution', 'seeders', 'size'],
       display: DISPLAY_DEFAULTS.slice(),
-      limit: 0, tierTop: 0, tierBalanced: 0, tierEfficient: 0, addonCap: 0, debug: false,
+      limit: 0, tierTop: 0, tierBalanced: 0, tierEfficient: 0, addonCap: 0, debug: false, trustProxies: false,
       filters: { cachedOnly: false, minSeeders: 0, maxSizeGb: 0, minResolution: '', excludeTerms: [], requiredHdr: [], requiredCodec: [], requiredSource: [], requiredAudio: [] },
       addonTimeouts: {},
     };

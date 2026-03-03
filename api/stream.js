@@ -82,7 +82,7 @@ export default async function handler(req, res) {
     resolvedConfig = stored;
   }
 
-  const { addons, sort, display, limit, tierTop, tierBalanced, tierEfficient, addonCap, debug, filters, addonTimeouts } = parseConfig(resolvedConfig);
+  const { addons, sort, display, limit, tierTop, tierBalanced, tierEfficient, addonCap, debug, trustProxies, filters, addonTimeouts } = parseConfig(resolvedConfig);
   const { imdbId, season, episode } = parseId(rawId);
 
   if (!addons.length) {
@@ -131,9 +131,10 @@ export default async function handler(req, res) {
         const slice = addonCap > 0 ? streams.slice(0, addonCap) : streams;
         allStreams.push(...slice.map(s => ({
           ...s,
-          _addonIdx:  i,
-          _addonUrl:  addons[i],
-          _addonName: identifyAddonName(s, addons[i]),
+          _addonIdx:      i,
+          _addonUrl:      addons[i],
+          _addonName:     identifyAddonName(s, addons[i]),
+          _trustProxies:  trustProxies,
         })));
       }
     }
