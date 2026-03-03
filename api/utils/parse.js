@@ -1,7 +1,7 @@
 // api/utils/parse.js
 // Shared constants, tag extractors, signal detectors, and request helpers.
 
-export const FETCH_TIMEOUT_MS = 8500;
+export const FETCH_TIMEOUT_MS = 7000;
 
 export const DISPLAY_DEFAULTS = ['source', 'resolution', 'cached', 'tags', 'filename', 'seeders', 'size'];
 
@@ -62,13 +62,12 @@ const ALL_TAGS = [...SOURCE_TAGS, ...HDR_TAGS, ...CODEC_TAGS, ...AUDIO_TAGS];
 // ---------------------------------------------------------------------------
 
 export function extractResolution(stream) {
-  const haystack = `${stream.name ?? ''} ${stream.title ?? ''}`.toLowerCase();
-  for (const tag of RESOLUTION_TAGS) {
-    if (haystack.includes(tag)) return tag;
-  }
-  if (haystack.includes('uhd')) return '4k';
-  if (haystack.includes('fhd')) return '1080p';
-  if (haystack.includes('hd'))  return '720p';
+  const haystack = `${stream.name ?? ''} ${stream.title ?? ''}`;
+  if (/\b(4k|2160p|uhd)\b/i.test(haystack))  return '4k';
+  if (/\b(1080p|fhd)\b/i.test(haystack))      return '1080p';
+  if (/\b(720p|hd)\b/i.test(haystack))        return '720p';
+  if (/\b(480p)\b/i.test(haystack))           return '480p';
+  if (/\b(360p)\b/i.test(haystack))           return '360p';
   return 'unknown';
 }
 

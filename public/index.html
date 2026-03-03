@@ -249,43 +249,6 @@ function InstallButton({ manifestUrl }) {
   );
 }
 
-function ShortenButton({ configB64, onShorten }) {
-  const [status, setStatus] = useState('idle'); // idle | loading | done | error
-
-  const handleClick = async () => {
-    if (status === 'loading' || status === 'done') return;
-    setStatus('loading');
-    try {
-      const r = await fetch('/api/save-config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ config: configB64 }),
-      });
-      const data = await r.json();
-      if (!r.ok || !data.shortUrl) throw new Error(data.error ?? 'Unknown error');
-      onShorten(data.shortUrl);
-      setStatus('done');
-    } catch {
-      setStatus('error');
-    }
-  };
-
-  if (status === 'done') {
-    return <span className="text-xs text-emerald-400 px-2 py-0.5">✓ Shortened</span>;
-  }
-
-  return (
-    <button
-      onClick={handleClick}
-      disabled={status === 'loading'}
-      className="shrink-0 px-3 py-1.5 rounded border border-border text-xs text-zinc-400
-                 hover:border-zinc-400 hover:text-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition"
-    >
-      {status === 'loading' ? 'Shortening…' : status === 'error' ? 'Error — retry' : 'Shorten URL'}
-    </button>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Preset quick-start row
 // ---------------------------------------------------------------------------
@@ -1214,7 +1177,8 @@ function App() {
   const [addonHealth,    setAddonHealth]    = useState({});
   const [preview,        setPreview]        = useState({ status: 'idle', count: 0, error: '' });
   const [previewId,      setPreviewId]      = useState('tt0468569:movie');
-  const [shortUrl,       setShortUrl]       = useState(null);
+  const [shortManifestUrl, setShortManifestUrl] = useState('');
+  const [isGenerating,     setIsGenerating]     = useState(false);
 
   // Saved presets (localStorage-backed)
   const [savedPresets, setSavedPresets] = useState(() => {
@@ -1377,9 +1341,27 @@ function App() {
       setPreview({ status: 'error', count: 0, error: e.message });
     }
   };
+
+  const generateShortLink = async () => {
+    setIsGenerating(true);
+    setShortManifestUrl('');
+    try {
+      const res = await fetch('/api/save-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config: configB64 }),
+      });
+      if (!res.ok) throw new Error('Failed to generate');
+      const data = await res.json();
+      setShortManifestUrl(buildManifestUrl(origin, data.id));
+    } catch {
+      setShortManifestUrl(manifestUrl); // fallback to long URL on error
+    }
+    setIsGenerating(false);
+  };
+
   const manifestUrl = buildManifestUrl(origin, configB64);
-  useEffect(() => { setShortUrl(null); }, [configB64]);
-  const displayedManifestUrl = shortUrl ?? manifestUrl;
+  useEffect(() => { setShortManifestUrl(''); setIsGenerating(false); }, [configB64]);
   const isReady     = validAddons.length > 0;
 
   const hasActiveFilters = filters.cachedOnly || filters.minSeeders > 0 || filters.maxSizeGb > 0 || !!filters.minResolution
@@ -1528,15 +1510,9 @@ function App() {
               <p className="text-xs text-zinc-500 mb-1.5">Manifest URL</p>
               <div className="flex items-center gap-2">
                 <code className="flex-1 text-xs text-zinc-300 break-all leading-relaxed">
-                  {displayedManifestUrl}
+                  {manifestUrl}
                 </code>
-                <CopyButton text={displayedManifestUrl} />
-              </div>
-              <div className="mt-2 flex items-center gap-2">
-                <ShortenButton key={configB64} configB64={configB64} onShorten={setShortUrl} />
-                {shortUrl && (
-                  <span className="text-xs text-zinc-500">Shortened — change any setting to restore full URL</span>
-                )}
+                <CopyButton text={manifestUrl} />
               </div>
             </div>
 
@@ -1628,18 +1604,29 @@ function App() {
             </div>
 
             {/* Install buttons */}
-            <div className="flex flex-wrap gap-3">
-              <InstallButton manifestUrl={displayedManifestUrl} />
-              <CopyButton text={displayedManifestUrl.replace(/^https?:\/\//, 'stremio://')} />
-              <a
-                href={`https://web.stremio.com/#/?addonOpen=${encodeURIComponent(displayedManifestUrl)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 rounded border border-border text-zinc-300 hover:border-zinc-400
-                           hover:text-white text-sm transition text-center"
-              >
-                Open in Stremio Web
-              </a>
+            <div className="flex flex-col gap-3">
+              {!shortManifestUrl ? (
+                <button
+                  onClick={generateShortLink}
+                  disabled={isGenerating || window.location.protocol === 'file:'}
+                  className="px-4 py-2 rounded bg-accent hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm transition text-center font-semibold"
+                >
+                  {isGenerating ? 'Generating Install Link…' : 'Generate Install Link'}
+                </button>
+              ) : (
+                <div className="flex flex-wrap gap-3">
+                  <InstallButton manifestUrl={shortManifestUrl} />
+                  <CopyButton text={shortManifestUrl.replace(/^https?:\/\//, 'stremio://')} />
+                  <a
+                    href={`https://web.stremio.com/#/?addonOpen=${encodeURIComponent(shortManifestUrl)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2 rounded border border-border text-zinc-300 hover:border-zinc-400 hover:text-white text-sm transition text-center"
+                  >
+                    Open in Stremio Web
+                  </a>
+                </div>
+              )}
             </div>
 
             {/* Config debug (collapsed) */}

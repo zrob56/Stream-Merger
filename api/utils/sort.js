@@ -11,7 +11,7 @@ export const SOURCE_QUALITY_ORDER     = ['Remux', 'BluRay', 'WEB-DL', 'WEBRip', 
 export const DIVERSITY_SOURCE_PRIORITY = ['Remux', 'BluRay', 'WEB-DL', 'WEBRip', 'HDTV', 'DVD'];
 export const DIVERSITY_HDR_PRIORITY    = ['DV', 'HDR10+', 'HDR10', 'HDR', 'HLG'];
 
-export const TRASH_TERMS = ['cam', 'hdcam', 'ts', 'telesync', 'screener', 'r5', 'dvdscr'];
+const TRASH_RE = /\b(cam|hdcam|ts|telesync|screener|scr|dvdscr|r5|tc|telecine)\b/i;
 
 export const BLOAT_GB = {
   movie:  { '4k': 160, '2160p': 160, '1080p': 45, '720p': 15, '480p': 5, '360p': 5 },
@@ -52,8 +52,9 @@ function getCodecTier(stream) {
 // ---------------------------------------------------------------------------
 
 function isTrash(stream) {
-  const haystack = `${stream.name ?? ''} ${stream.title ?? ''}`.toLowerCase();
-  return TRASH_TERMS.some(t => haystack.includes(t));
+  const haystack = [stream.name, stream.title, stream.behaviorHints?.filename]
+    .filter(Boolean).join(' ');
+  return TRASH_RE.test(haystack);
 }
 
 function isBloat(stream, type) {
