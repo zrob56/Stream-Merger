@@ -43,7 +43,10 @@ export function applyFilters(streams, filters) {
     if (filters.minResolution) {
       const minIdx    = QUALITY_ORDER.indexOf(filters.minResolution);
       const streamIdx = QUALITY_ORDER.indexOf(extractResolution(s));
-      if (streamIdx === QUALITY_ORDER.length - 1 || streamIdx > minIdx) return false;
+
+      // Allow 'unknown' resolutions (the last index) to pass through as a fallback.
+      // Only block explicitly tagged resolutions that fall below the minimum index.
+      if (streamIdx !== QUALITY_ORDER.length - 1 && streamIdx > minIdx) return false;
     }
     return true;
   });
