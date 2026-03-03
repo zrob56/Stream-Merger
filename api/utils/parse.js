@@ -70,11 +70,39 @@ function getHaystack(stream) {
 
 export function extractResolution(stream) {
   const h = getHaystack(stream);
-  if (/\b(4k|2160p|uhd)\b/.test(h))  return '4k';
-  if (/\b(1080p|fhd)\b/.test(h))     return '1080p';
-  if (/\b(720p|hd)\b/.test(h))       return '720p';
-  if (/\b(480p)\b/.test(h))          return '480p';
-  if (/\b(360p)\b/.test(h))          return '360p';
+
+  // 1. Expanded Text Matching (Catches scene releases like '1080', '1080i', 'dvdrip')
+  if (/\b(4k|2160p|2160|uhd)\b/.test(h)) return '4k';
+  if (/\b(1080p|1080i|1080|fhd)\b/.test(h)) return '1080p';
+  if (/\b(720p|720|hd)\b/.test(h)) return '720p';
+  if (/\b(480p|480|576p|576|sd|dvd|dvdrip)\b/.test(h)) return '480p';
+  if (/\b(360p|360)\b/.test(h)) return '360p';
+
+  // 2. File Size Heuristics (Ultimate Fallback)
+  const size = extractSizeGb(stream);
+  if (size > 0) {
+    // Detect if it's a multi-file pack (size heuristics don't work on massive folders)
+    const eps = extractEpisodes(stream);
+    const isPack = /\b(season|complete|pack|bundle)\b/i.test(h) || eps.length > 1;
+
+    if (!isPack) {
+      const isSeries = eps.length === 1 || /\b(episode|ep)\b/i.test(h);
+      if (isSeries) {
+        // Single Episode thresholds
+        if (size > 3.5) return '4k';
+        if (size > 1.2) return '1080p';
+        if (size > 0.4) return '720p';
+        return '480p';
+      } else {
+        // Movie thresholds
+        if (size > 12) return '4k';
+        if (size > 3.0) return '1080p';
+        if (size > 0.8) return '720p';
+        return '480p';
+      }
+    }
+  }
+
   return 'unknown';
 }
 
