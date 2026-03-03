@@ -78,10 +78,10 @@ export function deduplicateStreams(streams) {
     const normalized = key.toLowerCase();
     if (!seen.has(normalized)) {
       seen.set(normalized, result.length);
-      const srcName = (stream.name ?? '').split('\n')[0].trim();
+      const srcName = stream._addonName ?? '';
       result.push({ ...stream, _sources: srcName ? [srcName] : [] });
     } else {
-      const dupSrc = (stream.name ?? '').split('\n')[0].trim();
+      const dupSrc = stream._addonName ?? '';
       if (dupSrc) {
         const kept = result[seen.get(normalized)];
         if (!kept._sources.includes(dupSrc)) kept._sources.push(dupSrc);
@@ -116,7 +116,7 @@ export function deduplicateStreams(streams) {
     for (const cand of candidates) {
       if (Math.abs(cand.size - sizeA) <= 0.05) {
         // Merge: append this stream's source into the kept stream's _sources
-        const dupSrc = (s.name ?? '').split('\n')[0].trim();
+        const dupSrc = s._addonName ?? '';
         if (dupSrc && !result[cand.idx]._sources.includes(dupSrc)) {
           result[cand.idx]._sources.push(dupSrc);
         }

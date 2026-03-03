@@ -34,6 +34,32 @@ async function getRedis() {
 }
 
 // ---------------------------------------------------------------------------
+// Addon name identification — scans manifest URL + video URL + stream name
+// ---------------------------------------------------------------------------
+
+function identifyAddonName(stream, manifestUrl) {
+  const haystack = `${manifestUrl ?? ''} ${stream.url ?? ''} ${stream.name ?? ''}`.toLowerCase();
+
+  if (haystack.includes('stremthru'))     return 'StremThru';
+  if (haystack.includes('torrentsdb'))    return 'TorrentsDB';
+  if (haystack.includes('torrentio'))     return 'Torrentio';
+  if (haystack.includes('comet'))         return 'Comet';
+  if (haystack.includes('mediafusion'))   return 'MediaFusion';
+  if (haystack.includes('jackettio'))     return 'Jackettio';
+  if (haystack.includes('knightcrawler')) return 'KnightCrawler';
+  if (haystack.includes('annatar'))       return 'Annatar';
+
+  try {
+    const host = new URL(manifestUrl).hostname.toLowerCase();
+    const cleanHost = host.replace(/^www\./, '');
+    const first = cleanHost.split('.')[0];
+    return first.charAt(0).toUpperCase() + first.slice(1);
+  } catch {
+    return 'Unknown';
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main handler
 // ---------------------------------------------------------------------------
 
@@ -105,8 +131,9 @@ export default async function handler(req, res) {
         const slice = addonCap > 0 ? streams.slice(0, addonCap) : streams;
         allStreams.push(...slice.map(s => ({
           ...s,
-          _addonIdx: i,
-          _addonUrl: addons[i],
+          _addonIdx:  i,
+          _addonUrl:  addons[i],
+          _addonName: identifyAddonName(s, addons[i]),
         })));
       }
     }
