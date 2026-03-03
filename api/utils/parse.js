@@ -192,8 +192,9 @@ export function parseConfig(raw) {
 
     const limit        = typeof parsed.limit        === 'number' && parsed.limit        > 0 ? Math.floor(parsed.limit)        : 0;
     const tierTop      = typeof parsed.tierTop      === 'number' && parsed.tierTop      > 0 ? Math.floor(parsed.tierTop)      : 0;
-    const tierBalanced = typeof parsed.tierBalanced === 'number' && parsed.tierBalanced > 0 ? Math.floor(parsed.tierBalanced) : 0;
-    const addonCap     = typeof parsed.addonCap     === 'number' && parsed.addonCap     > 0 ? Math.floor(parsed.addonCap)     : 0;
+    const tierBalanced  = typeof parsed.tierBalanced  === 'number' && parsed.tierBalanced  > 0 ? Math.floor(parsed.tierBalanced)  : 0;
+    const tierEfficient = typeof parsed.tierEfficient === 'number' && parsed.tierEfficient > 0 ? Math.floor(parsed.tierEfficient) : 0;
+    const addonCap      = typeof parsed.addonCap      === 'number' && parsed.addonCap      > 0 ? Math.floor(parsed.addonCap)      : 0;
     const debug        = Boolean(parsed.debug);
 
     const rf = parsed.filters ?? {};
@@ -221,14 +222,14 @@ export function parseConfig(raw) {
 
     return {
       addons: Array.isArray(parsed.addons) ? parsed.addons : [],
-      sort, display, limit, tierTop, tierBalanced, addonCap, debug, filters, addonTimeouts,
+      sort, display, limit, tierTop, tierBalanced, tierEfficient, addonCap, debug, filters, addonTimeouts,
     };
   } catch {
     return {
       addons: [],
       sort:    ['cached', 'resolution', 'seeders', 'size'],
       display: DISPLAY_DEFAULTS.slice(),
-      limit: 0, tierTop: 0, tierBalanced: 0, addonCap: 0, debug: false,
+      limit: 0, tierTop: 0, tierBalanced: 0, tierEfficient: 0, addonCap: 0, debug: false,
       filters: { cachedOnly: false, minSeeders: 0, maxSizeGb: 0, minResolution: '', excludeTerms: [], requiredHdr: [], requiredCodec: [], requiredSource: [], requiredAudio: [] },
       addonTimeouts: {},
     };

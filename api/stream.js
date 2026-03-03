@@ -82,7 +82,7 @@ export default async function handler(req, res) {
     resolvedConfig = stored;
   }
 
-  const { addons, sort, display, limit, tierTop, tierBalanced, addonCap, debug, filters, addonTimeouts } = parseConfig(resolvedConfig);
+  const { addons, sort, display, limit, tierTop, tierBalanced, tierEfficient, addonCap, debug, filters, addonTimeouts } = parseConfig(resolvedConfig);
   const { imdbId, season, episode } = parseId(rawId);
 
   if (!addons.length) {
@@ -153,7 +153,7 @@ export default async function handler(req, res) {
   const sorted      = sortStreams(allStreams, sort, type);
   const deduped     = deduplicateStreams(sorted);
   const filtered    = applyFilters(deduped, filters);
-  const tiered      = applySmartTiering(filtered, tierTop, tierBalanced);
+  const tiered      = applySmartTiering(filtered, tierTop, tierBalanced, tierEfficient);
   const normalized  = normalizeBingeGroup(tiered, imdbId);
   const formatted   = formatStreamDisplay(normalized, display);
 

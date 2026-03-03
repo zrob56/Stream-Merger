@@ -137,8 +137,8 @@ export function deduplicateStreams(streams) {
 // Smart Tiering (Customizable Top vs Balanced Limits)
 // ---------------------------------------------------------------------------
 
-export function applySmartTiering(streams, tierTop, tierBalanced) {
-  if (tierTop <= 0 && tierBalanced <= 0) return streams;
+export function applySmartTiering(streams, tierTop, tierBalanced, tierEfficient) {
+  if (tierTop <= 0 && tierBalanced <= 0 && tierEfficient <= 0) return streams;
 
   const keptStreams = new Set();
   const resGroups  = new Map();
@@ -149,39 +149,54 @@ export function applySmartTiering(streams, tierTop, tierBalanced) {
     resGroups.get(r).push(s);
   }
 
-  for (const [, group] of resGroups.entries()) {
+  for (const [r, group] of resGroups.entries()) {
     let maxSize = 0;
     for (const s of group) {
       const sz = extractSizeGb(s);
       if (sz > maxSize) maxSize = sz;
     }
 
-    const r = extractResolution(group[0]);
-    let threshold = maxSize * 0.5;
-    if (r === '4k' || r === '2160p') threshold = Math.max(threshold, 25);
-    else if (r === '1080p')          threshold = Math.max(threshold, 12);
-    else if (r === '720p')           threshold = Math.max(threshold, 5);
-    else                             threshold = Math.max(threshold, 2);
+    // Balanced threshold: 50% of max, with resolution floor
+    let balancedThreshold = maxSize * 0.5;
+    if (r === '4k' || r === '2160p') balancedThreshold = Math.max(balancedThreshold, 25);
+    else if (r === '1080p')          balancedThreshold = Math.max(balancedThreshold, 12);
+    else if (r === '720p')           balancedThreshold = Math.max(balancedThreshold, 5);
+    else                             balancedThreshold = Math.max(balancedThreshold, 2);
+
+    // Efficient threshold: 25% of max, clamped per resolution
+    let effThresh = maxSize * 0.25;
+    if (r === '4k' || r === '2160p') effThresh = Math.min(Math.max(effThresh, 3), 8);
+    else if (r === '1080p')          effThresh = Math.min(Math.max(effThresh, 1), 3);
+    else if (r === '720p')           effThresh = Math.min(Math.max(effThresh, 0.5), 1.5);
+    else                             effThresh = Math.min(Math.max(effThresh, 0.2), 1);
 
     const selected  = [];
     const leftovers = [];
-    let topCount = 0, balancedCount = 0;
+    let topCount = 0, balancedCount = 0, efficientCount = 0;
 
     for (const s of group) {
-      const sz         = extractSizeGb(s);
-      const isBalanced = sz > 0 && sz <= threshold;
+      const sz = extractSizeGb(s);
 
-      if (!isBalanced) {
-        if (topCount < tierTop) { selected.push(s); topCount++; }
+      if (sz > 0 && sz <= effThresh) {
+        // Efficient tier — cascade up to balanced, then top
+        if      (efficientCount < tierEfficient) { selected.push(s); efficientCount++; }
+        else if (balancedCount  < tierBalanced)  { selected.push(s); balancedCount++;  }
+        else if (topCount       < tierTop)       { selected.push(s); topCount++;       }
+        else leftovers.push(s);
+      } else if (sz > 0 && sz <= balancedThreshold) {
+        // Balanced tier — cascade up to top
+        if      (balancedCount < tierBalanced) { selected.push(s); balancedCount++; }
+        else if (topCount      < tierTop)      { selected.push(s); topCount++;      }
         else leftovers.push(s);
       } else {
-        if (balancedCount < tierBalanced)   { selected.push(s); balancedCount++; }
-        else if (topCount  < tierTop)       { selected.push(s); topCount++; }
+        // Top tier (large/Remux or unknown size)
+        if (topCount < tierTop) { selected.push(s); topCount++; }
         else leftovers.push(s);
       }
     }
 
-    const needed = (tierTop + tierBalanced) - selected.length;
+    // Backfill gaps up to the combined slot total
+    const needed = (tierTop + tierBalanced + tierEfficient) - selected.length;
     for (let i = 0; i < needed && leftovers.length > 0; i++) selected.push(leftovers.shift());
 
     for (const s of selected) keptStreams.add(s);

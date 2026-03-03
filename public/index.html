@@ -111,13 +111,14 @@ const PRESETS = [
 // Utilities
 // ---------------------------------------------------------------------------
 
-function buildConfig(addons, sort, display, { limit, tierTop, tierBalanced, addonCap, debug, filters, addonTimeouts }) {
+function buildConfig(addons, sort, display, { limit, tierTop, tierBalanced, tierEfficient, addonCap, debug, filters, addonTimeouts }) {
   const payload = { addons: addons.filter(Boolean) };
   if (JSON.stringify(sort) !== JSON.stringify(DEFAULT_SORT)) payload.sort = sort;
   if (JSON.stringify(display) !== JSON.stringify(DEFAULT_DISPLAY)) payload.display = display;
-  if (limit        > 0) payload.limit        = limit;
-  if (tierTop      > 0) payload.tierTop      = tierTop;
-  if (tierBalanced > 0) payload.tierBalanced = tierBalanced;
+  if (limit         > 0) payload.limit         = limit;
+  if (tierTop       > 0) payload.tierTop       = tierTop;
+  if (tierBalanced  > 0) payload.tierBalanced  = tierBalanced;
+  if (tierEfficient > 0) payload.tierEfficient = tierEfficient;
   if (addonCap > 0) payload.addonCap = addonCap;
   if (debug)        payload.debug    = true;
   if (filters.cachedOnly || filters.minSeeders > 0 || filters.maxSizeGb > 0 || filters.minResolution
@@ -833,7 +834,7 @@ function NumInput({ value, onChange, min = 0, step = 1, placeholder = '0', width
 // Filters & Limits section
 // ---------------------------------------------------------------------------
 
-function FiltersSection({ filters, setFilters, limit, setLimit, tierTop, setTierTop, tierBalanced, setTierBalanced, addonCap, setAddonCap, debug, setDebug }) {
+function FiltersSection({ filters, setFilters, limit, setLimit, tierTop, setTierTop, tierBalanced, setTierBalanced, tierEfficient, setTierEfficient, addonCap, setAddonCap, debug, setDebug }) {
   const [termInput, setTermInput] = useState('');
 
   const Row = ({ children }) => (
@@ -1070,7 +1071,7 @@ function FiltersSection({ filters, setFilters, limit, setLimit, tierTop, setTier
       <Row>
         <div className="flex-1 min-w-0">
           <p className="text-sm text-zinc-200">Smart tiering</p>
-          <p className="text-xs text-zinc-500">Per-resolution slot limits — Top: large/Remux files · Balanced: compressed/WEB-DL (0 = off)</p>
+          <p className="text-xs text-zinc-500">Per-resolution slot limits — Top: large/Remux · Balanced: compressed/WEB-DL · Efficient: hyper-compressed (0 = off)</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex flex-col items-center gap-0.5">
@@ -1086,6 +1087,14 @@ function FiltersSection({ filters, setFilters, limit, setLimit, tierTop, setTier
             <NumInput
               value={tierBalanced}
               onChange={e => setTierBalanced(Math.max(0, parseInt(e.target.value) || 0))}
+              placeholder="off"
+            />
+          </div>
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-xs text-zinc-500">Efficient</span>
+            <NumInput
+              value={tierEfficient}
+              onChange={e => setTierEfficient(Math.max(0, parseInt(e.target.value) || 0))}
               placeholder="off"
             />
           </div>
@@ -1140,6 +1149,7 @@ function loadLiveState() {
       limit:         typeof s.limit         === 'number' ? s.limit         : 0,
       tierTop:       typeof s.tierTop       === 'number' ? s.tierTop       : 0,
       tierBalanced:  typeof s.tierBalanced  === 'number' ? s.tierBalanced  : 0,
+      tierEfficient: typeof s.tierEfficient === 'number' ? s.tierEfficient : 0,
       addonCap:      typeof s.addonCap      === 'number' ? s.addonCap      : 0,
       debug:         Boolean(s.debug),
       filters:       (s.filters && typeof s.filters === 'object') ? { ...DEFAULT_FILTERS, ...s.filters } : DEFAULT_FILTERS,
@@ -1166,6 +1176,7 @@ function App() {
   const [limit,          setLimit]          = useState(() => _live?.limit          ?? 0);
   const [tierTop,        setTierTop]        = useState(() => _live?.tierTop        ?? 0);
   const [tierBalanced,   setTierBalanced]   = useState(() => _live?.tierBalanced   ?? 0);
+  const [tierEfficient,  setTierEfficient]  = useState(() => _live?.tierEfficient  ?? 0);
   const [addonCap,       setAddonCap]       = useState(() => _live?.addonCap       ?? 0);
   const [debug,          setDebug]          = useState(() => _live?.debug          ?? false);
   const [filters,        setFilters]        = useState(() => _live?.filters        ?? DEFAULT_FILTERS);
@@ -1188,10 +1199,10 @@ function App() {
   useEffect(() => {
     try {
       localStorage.setItem('us_live', JSON.stringify({
-        selected, sort, display, limit, tierTop, tierBalanced, addonCap, debug, filters, addonTimeouts,
+        selected, sort, display, limit, tierTop, tierBalanced, tierEfficient, addonCap, debug, filters, addonTimeouts,
       }));
     } catch { /* storage full / private mode */ }
-  }, [selected, sort, display, limit, tierTop, tierBalanced, addonCap, debug, filters, addonTimeouts]);
+  }, [selected, sort, display, limit, tierTop, tierBalanced, tierEfficient, addonCap, debug, filters, addonTimeouts]);
 
   // Set of transportUrls currently selected — for O(1) lookup in browser rows
   const selectedUrls = new Set(selected.map((a) => a.url));
@@ -1225,7 +1236,7 @@ function App() {
   });
 
   // Capture current full state for named preset saving
-  const getCurrentState = () => ({ selected, sort, display, limit, tierTop, tierBalanced, addonCap, debug, filters, addonTimeouts });
+  const getCurrentState = () => ({ selected, sort, display, limit, tierTop, tierBalanced, tierEfficient, addonCap, debug, filters, addonTimeouts });
 
   // Load a named preset (full state replacement)
   const loadPreset = (preset) => {
@@ -1235,6 +1246,7 @@ function App() {
     setLimit(preset.state.limit);
     setTierTop(preset.state.tierTop ?? 0);
     setTierBalanced(preset.state.tierBalanced ?? 0);
+    setTierEfficient(preset.state.tierEfficient ?? 0);
     setAddonCap(preset.state.addonCap ?? 0);
     setDebug(preset.state.debug);
     setFilters(preset.state.filters);
@@ -1258,8 +1270,8 @@ function App() {
   const resetToDefaults = () => {
     try { localStorage.removeItem('us_live'); } catch {}
     setSelected([]); setSort(DEFAULT_SORT); setDisplay(DEFAULT_DISPLAY);
-    setLimit(0); setResCap(0); setAddonCap(0);
-    setDebug(false); setDiversify(false); setFilters(DEFAULT_FILTERS);
+    setLimit(0); setTierTop(0); setTierBalanced(0); setTierEfficient(0); setAddonCap(0);
+    setDebug(false); setFilters(DEFAULT_FILTERS);
     setAddonTimeouts({}); setAddonHealth({}); setPreview({ status: 'idle', count: 0, error: '' });
   };
 
@@ -1290,6 +1302,7 @@ function App() {
         setLimit(typeof s.limit         === 'number' ? s.limit         : 0);
         setTierTop(typeof s.tierTop     === 'number' ? s.tierTop       : 0);
         setTierBalanced(typeof s.tierBalanced === 'number' ? s.tierBalanced : 0);
+        setTierEfficient(typeof s.tierEfficient === 'number' ? s.tierEfficient : 0);
         setAddonCap(typeof s.addonCap === 'number' ? s.addonCap : 0);
         setDebug(Boolean(s.debug));
         setFilters(s.filters && typeof s.filters === 'object'
@@ -1314,7 +1327,7 @@ function App() {
   // --- Derived values ---
   const validAddons = selected.filter((a) => a.url && isValidUrl(a.url));
   const addonUrls   = validAddons.map((a) => a.url);
-  const configB64   = buildConfig(addonUrls, sort, display, { limit, tierTop, tierBalanced, addonCap, debug, filters, addonTimeouts });
+  const configB64   = buildConfig(addonUrls, sort, display, { limit, tierTop, tierBalanced, tierEfficient, addonCap, debug, filters, addonTimeouts });
 
   // --- Stream preview ---
   useEffect(() => {
@@ -1478,6 +1491,7 @@ function App() {
           limit={limit}                 setLimit={setLimit}
           tierTop={tierTop}             setTierTop={setTierTop}
           tierBalanced={tierBalanced}   setTierBalanced={setTierBalanced}
+          tierEfficient={tierEfficient} setTierEfficient={setTierEfficient}
           addonCap={addonCap}           setAddonCap={setAddonCap}
           debug={debug}                 setDebug={setDebug}
         />
@@ -1585,8 +1599,8 @@ function App() {
               {limit > 0 && (
                 <span className="px-2 py-0.5 rounded bg-panel border border-border">limit: {limit}</span>
               )}
-              {(tierTop > 0 || tierBalanced > 0) && (
-                <span className="px-2 py-0.5 rounded bg-panel border border-border">tiers: {tierTop}T+{tierBalanced}B</span>
+              {(tierTop > 0 || tierBalanced > 0 || tierEfficient > 0) && (
+                <span className="px-2 py-0.5 rounded bg-panel border border-border">tiers: {tierTop}T+{tierBalanced}B+{tierEfficient}E</span>
               )}
               {addonCap > 0 && (
                 <span className="px-2 py-0.5 rounded bg-panel border border-border">addon-cap: {addonCap}</span>
@@ -1632,9 +1646,10 @@ function App() {
                   {
                     addons: addonUrls, sort, display,
                     ...(limit        > 0 ? { limit }        : {}),
-                    ...(tierTop      > 0 ? { tierTop }      : {}),
-                    ...(tierBalanced > 0 ? { tierBalanced } : {}),
-                    ...(addonCap     > 0 ? { addonCap }     : {}),
+                    ...(tierTop       > 0 ? { tierTop }       : {}),
+                    ...(tierBalanced  > 0 ? { tierBalanced }  : {}),
+                    ...(tierEfficient > 0 ? { tierEfficient } : {}),
+                    ...(addonCap      > 0 ? { addonCap }      : {}),
                     ...(debug            ? { debug }        : {}),
                     ...(hasActiveFilters ? { filters } : {}),
                   },
