@@ -9,7 +9,7 @@ import {
   QUALITY_ORDER, FETCH_TIMEOUT_MS,
 } from './utils/parse.js';
 import { sortStreams } from './utils/sort.js';
-import { deduplicateStreams, applyFilters, diversifyStreams, capByResolution } from './utils/filter.js';
+import { deduplicateStreams, applyFilters, applySmartTiering } from './utils/filter.js';
 import { normalizeBingeGroup, formatStreamDisplay, sanitizeStream } from './utils/format.js';
 
 // ---------------------------------------------------------------------------
@@ -56,7 +56,7 @@ export default async function handler(req, res) {
     resolvedConfig = stored;
   }
 
-  const { addons, sort, display, limit, resCap, addonCap, debug, diversify, filters, addonTimeouts } = parseConfig(resolvedConfig);
+  const { addons, sort, display, limit, tierTop, tierBalanced, addonCap, debug, filters, addonTimeouts } = parseConfig(resolvedConfig);
   const { imdbId, season, episode } = parseId(rawId);
 
   if (!addons.length) {
@@ -126,9 +126,8 @@ export default async function handler(req, res) {
   const sorted      = sortStreams(allStreams, sort, type);
   const deduped     = deduplicateStreams(sorted);
   const filtered    = applyFilters(deduped, filters);
-  const diversified = diversify ? diversifyStreams(filtered) : filtered;
-  const capped      = resCap > 0 ? capByResolution(diversified, resCap) : diversified;
-  const normalized  = normalizeBingeGroup(capped, imdbId);
+  const tiered      = applySmartTiering(filtered, tierTop, tierBalanced);
+  const normalized  = normalizeBingeGroup(tiered, imdbId);
   const formatted   = formatStreamDisplay(normalized, display);
 
   // Count surviving streams per addon (before sanitizing _addonIdx) for debug

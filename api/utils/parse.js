@@ -190,11 +190,11 @@ export function parseConfig(raw) {
     display = display.filter(k => DISPLAY_DEFAULTS.includes(k));
     if (display.length === 0) display = DISPLAY_DEFAULTS.slice();
 
-    const limit    = typeof parsed.limit    === 'number' && parsed.limit    > 0 ? Math.floor(parsed.limit)    : 0;
-    const resCap   = typeof parsed.resCap   === 'number' && parsed.resCap   > 0 ? Math.floor(parsed.resCap)   : 0;
-    const addonCap = typeof parsed.addonCap === 'number' && parsed.addonCap > 0 ? Math.floor(parsed.addonCap) : 0;
-    const debug    = Boolean(parsed.debug);
-    const diversify = Boolean(parsed.diversify);
+    const limit        = typeof parsed.limit        === 'number' && parsed.limit        > 0 ? Math.floor(parsed.limit)        : 0;
+    const tierTop      = typeof parsed.tierTop      === 'number' && parsed.tierTop      > 0 ? Math.floor(parsed.tierTop)      : 0;
+    const tierBalanced = typeof parsed.tierBalanced === 'number' && parsed.tierBalanced > 0 ? Math.floor(parsed.tierBalanced) : 0;
+    const addonCap     = typeof parsed.addonCap     === 'number' && parsed.addonCap     > 0 ? Math.floor(parsed.addonCap)     : 0;
+    const debug        = Boolean(parsed.debug);
 
     const rf = parsed.filters ?? {};
     const filters = {
@@ -221,14 +221,14 @@ export function parseConfig(raw) {
 
     return {
       addons: Array.isArray(parsed.addons) ? parsed.addons : [],
-      sort, display, limit, resCap, addonCap, debug, diversify, filters, addonTimeouts,
+      sort, display, limit, tierTop, tierBalanced, addonCap, debug, filters, addonTimeouts,
     };
   } catch {
     return {
       addons: [],
       sort:    ['cached', 'resolution', 'seeders', 'size'],
       display: DISPLAY_DEFAULTS.slice(),
-      limit: 0, resCap: 0, addonCap: 0, debug: false, diversify: false,
+      limit: 0, tierTop: 0, tierBalanced: 0, addonCap: 0, debug: false,
       filters: { cachedOnly: false, minSeeders: 0, maxSizeGb: 0, minResolution: '', excludeTerms: [], requiredHdr: [], requiredCodec: [], requiredSource: [], requiredAudio: [] },
       addonTimeouts: {},
     };

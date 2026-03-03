@@ -1,12 +1,11 @@
 // api/utils/filter.js
-// Filtering, deduplication (exact + fuzzy), per-resolution cap, and diversity interleave.
+// Filtering, deduplication (exact + fuzzy), and smart tiering.
 
 import {
   extractResolution, extractSourceQuality, extractQualityTags,
   extractSeeders, extractSizeGb, isCachedDebrid,
   HDR_LABELS, CODEC_LABELS, SOURCE_LABELS, AUDIO_LABELS, QUALITY_ORDER,
 } from './parse.js';
-import { DIVERSITY_SOURCE_PRIORITY, DIVERSITY_HDR_PRIORITY } from './sort.js';
 
 // ---------------------------------------------------------------------------
 // Filter application
@@ -135,53 +134,58 @@ export function deduplicateStreams(streams) {
 }
 
 // ---------------------------------------------------------------------------
-// Per-resolution cap
+// Smart Tiering (Customizable Top vs Balanced Limits)
 // ---------------------------------------------------------------------------
 
-export function capByResolution(streams, maxPerTier) {
-  const counts = {};
-  return streams.filter(s => {
+export function applySmartTiering(streams, tierTop, tierBalanced) {
+  if (tierTop <= 0 && tierBalanced <= 0) return streams;
+
+  const keptStreams = new Set();
+  const resGroups  = new Map();
+
+  for (const s of streams) {
     const r = extractResolution(s);
-    counts[r] = (counts[r] ?? 0) + 1;
-    return counts[r] <= maxPerTier;
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Stream diversity — round-robin interleave across quality buckets
-// ---------------------------------------------------------------------------
-
-export function getSizeTier(stream) {
-  const gb = extractSizeGb(stream);
-  if (gb === 0) return 'unknown';
-  if (gb <  15) return 'compact'; // <15 GB  — 720p / small WEB-DL
-  if (gb <  50) return 'mid';     // 15–50 GB — 4K WEB-DL, 1080p Remux
-  return 'full';                  // ≥50 GB  — 4K Remux
-}
-
-export function diversifyStreams(streams) {
-  const buckets     = new Map();
-  const bucketOrder = [];
-
-  for (const stream of streams) {
-    const res  = extractResolution(stream);
-    const tags = extractQualityTags(stream);
-    const src  = DIVERSITY_SOURCE_PRIORITY.find(t => tags.includes(t)) ?? 'other';
-    const hdr  = DIVERSITY_HDR_PRIORITY.find(t => tags.includes(t))    ?? 'SDR';
-    const size = getSizeTier(stream);
-    const key  = `${res}|${src}|${hdr}|${size}`;
-    if (!buckets.has(key)) { buckets.set(key, []); bucketOrder.push(key); }
-    buckets.get(key).push(stream);
+    if (!resGroups.has(r)) resGroups.set(r, []);
+    resGroups.get(r).push(s);
   }
 
-  const result = [];
-  for (let round = 0; result.length < streams.length; round++) {
-    let added = false;
-    for (const key of bucketOrder) {
-      const bucket = buckets.get(key);
-      if (round < bucket.length) { result.push(bucket[round]); added = true; }
+  for (const [, group] of resGroups.entries()) {
+    let maxSize = 0;
+    for (const s of group) {
+      const sz = extractSizeGb(s);
+      if (sz > maxSize) maxSize = sz;
     }
-    if (!added) break;
+
+    const r = extractResolution(group[0]);
+    let threshold = maxSize * 0.5;
+    if (r === '4k' || r === '2160p') threshold = Math.max(threshold, 25);
+    else if (r === '1080p')          threshold = Math.max(threshold, 12);
+    else if (r === '720p')           threshold = Math.max(threshold, 5);
+    else                             threshold = Math.max(threshold, 2);
+
+    const selected  = [];
+    const leftovers = [];
+    let topCount = 0, balancedCount = 0;
+
+    for (const s of group) {
+      const sz         = extractSizeGb(s);
+      const isBalanced = sz > 0 && sz <= threshold;
+
+      if (!isBalanced) {
+        if (topCount < tierTop) { selected.push(s); topCount++; }
+        else leftovers.push(s);
+      } else {
+        if (balancedCount < tierBalanced)   { selected.push(s); balancedCount++; }
+        else if (topCount  < tierTop)       { selected.push(s); topCount++; }
+        else leftovers.push(s);
+      }
+    }
+
+    const needed = (tierTop + tierBalanced) - selected.length;
+    for (let i = 0; i < needed && leftovers.length > 0; i++) selected.push(leftovers.shift());
+
+    for (const s of selected) keptStreams.add(s);
   }
-  return result;
+
+  return streams.filter(s => keptStreams.has(s));
 }

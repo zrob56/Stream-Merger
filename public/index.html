@@ -111,15 +111,15 @@ const PRESETS = [
 // Utilities
 // ---------------------------------------------------------------------------
 
-function buildConfig(addons, sort, display, { limit, resCap, addonCap, debug, diversify, filters, addonTimeouts }) {
+function buildConfig(addons, sort, display, { limit, tierTop, tierBalanced, addonCap, debug, filters, addonTimeouts }) {
   const payload = { addons: addons.filter(Boolean) };
   if (JSON.stringify(sort) !== JSON.stringify(DEFAULT_SORT)) payload.sort = sort;
   if (JSON.stringify(display) !== JSON.stringify(DEFAULT_DISPLAY)) payload.display = display;
-  if (limit    > 0) payload.limit    = limit;
-  if (resCap   > 0) payload.resCap   = resCap;
+  if (limit        > 0) payload.limit        = limit;
+  if (tierTop      > 0) payload.tierTop      = tierTop;
+  if (tierBalanced > 0) payload.tierBalanced = tierBalanced;
   if (addonCap > 0) payload.addonCap = addonCap;
   if (debug)        payload.debug    = true;
-  if (diversify)    payload.diversify = true;
   if (filters.cachedOnly || filters.minSeeders > 0 || filters.maxSizeGb > 0 || filters.minResolution
       || filters.excludeTerms.length > 0 || filters.requiredHdr.length > 0
       || filters.requiredSource.length > 0 || filters.requiredAudio.length > 0) {
@@ -833,7 +833,7 @@ function NumInput({ value, onChange, min = 0, step = 1, placeholder = '0', width
 // Filters & Limits section
 // ---------------------------------------------------------------------------
 
-function FiltersSection({ filters, setFilters, limit, setLimit, resCap, setResCap, addonCap, setAddonCap, debug, setDebug, diversify, setDiversify }) {
+function FiltersSection({ filters, setFilters, limit, setLimit, tierTop, setTierTop, tierBalanced, setTierBalanced, addonCap, setAddonCap, debug, setDebug }) {
   const [termInput, setTermInput] = useState('');
 
   const Row = ({ children }) => (
@@ -1066,17 +1066,30 @@ function FiltersSection({ filters, setFilters, limit, setLimit, resCap, setResCa
         </div>
       </Row>
 
-      {/* Per-resolution cap */}
+      {/* Smart Tiering */}
       <Row>
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-zinc-200">Per-resolution cap</p>
-          <p className="text-xs text-zinc-500">Max streams per quality tier, e.g. 5 → keep best 5 per 4K / 1080p / … (0 = off)</p>
+          <p className="text-sm text-zinc-200">Smart tiering</p>
+          <p className="text-xs text-zinc-500">Per-resolution slot limits — Top: large/Remux files · Balanced: compressed/WEB-DL (0 = off)</p>
         </div>
-        <NumInput
-          value={resCap}
-          onChange={e => setResCap(Math.max(0, parseInt(e.target.value) || 0))}
-          placeholder="off"
-        />
+        <div className="flex items-center gap-2">
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-xs text-zinc-500">Top</span>
+            <NumInput
+              value={tierTop}
+              onChange={e => setTierTop(Math.max(0, parseInt(e.target.value) || 0))}
+              placeholder="off"
+            />
+          </div>
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-xs text-zinc-500">Balanced</span>
+            <NumInput
+              value={tierBalanced}
+              onChange={e => setTierBalanced(Math.max(0, parseInt(e.target.value) || 0))}
+              placeholder="off"
+            />
+          </div>
+        </div>
       </Row>
 
       {/* Per-addon cap */}
@@ -1091,23 +1104,6 @@ function FiltersSection({ filters, setFilters, limit, setLimit, resCap, setResCa
           placeholder="off"
         />
       </Row>
-
-      {/* Stream diversity */}
-      <label className="flex items-center gap-3 p-2.5 rounded border border-border bg-panel
-                        cursor-pointer hover:border-zinc-500 transition select-none">
-        <input
-          type="checkbox"
-          checked={diversify}
-          onChange={e => setDiversify(e.target.checked)}
-          className="w-4 h-4 shrink-0 accent-violet-600"
-        />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm text-zinc-200">Stream diversity</p>
-          <p className="text-xs text-zinc-500">
-            Interleave by quality type and file size (4K Remux 100 GB, 4K WEB-DL 20 GB, 1080p Remux…) instead of showing the same type or size repeatedly
-          </p>
-        </div>
-      </label>
 
       {/* Debug mode */}
       <label className="flex items-center gap-3 p-2.5 rounded border border-border bg-panel
@@ -1141,11 +1137,11 @@ function loadLiveState() {
       selected:      s.selected,
       sort:          s.sort,
       display:       s.display,
-      limit:         typeof s.limit    === 'number' ? s.limit    : 0,
-      resCap:        typeof s.resCap   === 'number' ? s.resCap   : 0,
-      addonCap:      typeof s.addonCap === 'number' ? s.addonCap : 0,
+      limit:         typeof s.limit         === 'number' ? s.limit         : 0,
+      tierTop:       typeof s.tierTop       === 'number' ? s.tierTop       : 0,
+      tierBalanced:  typeof s.tierBalanced  === 'number' ? s.tierBalanced  : 0,
+      addonCap:      typeof s.addonCap      === 'number' ? s.addonCap      : 0,
       debug:         Boolean(s.debug),
-      diversify:     Boolean(s.diversify),
       filters:       (s.filters && typeof s.filters === 'object') ? { ...DEFAULT_FILTERS, ...s.filters } : DEFAULT_FILTERS,
       addonTimeouts: (s.addonTimeouts && typeof s.addonTimeouts === 'object') ? s.addonTimeouts : {},
     };
@@ -1168,10 +1164,10 @@ function App() {
   const [sort,           setSort]           = useState(() => _live?.sort           ?? DEFAULT_SORT);
   const [display,        setDisplay]        = useState(() => _live?.display        ?? DEFAULT_DISPLAY);
   const [limit,          setLimit]          = useState(() => _live?.limit          ?? 0);
-  const [resCap,         setResCap]         = useState(() => _live?.resCap         ?? 0);
+  const [tierTop,        setTierTop]        = useState(() => _live?.tierTop        ?? 0);
+  const [tierBalanced,   setTierBalanced]   = useState(() => _live?.tierBalanced   ?? 0);
   const [addonCap,       setAddonCap]       = useState(() => _live?.addonCap       ?? 0);
   const [debug,          setDebug]          = useState(() => _live?.debug          ?? false);
-  const [diversify,      setDiversify]      = useState(() => _live?.diversify      ?? false);
   const [filters,        setFilters]        = useState(() => _live?.filters        ?? DEFAULT_FILTERS);
   const [addonTimeouts,  setAddonTimeouts]  = useState(() => _live?.addonTimeouts  ?? {});
   const [addonHealth,    setAddonHealth]    = useState({});
@@ -1192,10 +1188,10 @@ function App() {
   useEffect(() => {
     try {
       localStorage.setItem('us_live', JSON.stringify({
-        selected, sort, display, limit, resCap, addonCap, debug, diversify, filters, addonTimeouts,
+        selected, sort, display, limit, tierTop, tierBalanced, addonCap, debug, filters, addonTimeouts,
       }));
     } catch { /* storage full / private mode */ }
-  }, [selected, sort, display, limit, resCap, addonCap, debug, diversify, filters, addonTimeouts]);
+  }, [selected, sort, display, limit, tierTop, tierBalanced, addonCap, debug, filters, addonTimeouts]);
 
   // Set of transportUrls currently selected — for O(1) lookup in browser rows
   const selectedUrls = new Set(selected.map((a) => a.url));
@@ -1229,7 +1225,7 @@ function App() {
   });
 
   // Capture current full state for named preset saving
-  const getCurrentState = () => ({ selected, sort, display, limit, resCap, addonCap, debug, diversify, filters, addonTimeouts });
+  const getCurrentState = () => ({ selected, sort, display, limit, tierTop, tierBalanced, addonCap, debug, filters, addonTimeouts });
 
   // Load a named preset (full state replacement)
   const loadPreset = (preset) => {
@@ -1237,10 +1233,10 @@ function App() {
     setSort(preset.state.sort);
     setDisplay(preset.state.display);
     setLimit(preset.state.limit);
-    setResCap(preset.state.resCap);
+    setTierTop(preset.state.tierTop ?? 0);
+    setTierBalanced(preset.state.tierBalanced ?? 0);
     setAddonCap(preset.state.addonCap ?? 0);
     setDebug(preset.state.debug);
-    setDiversify(preset.state.diversify);
     setFilters(preset.state.filters);
     setAddonTimeouts(preset.state.addonTimeouts ?? {});
   };
@@ -1291,11 +1287,11 @@ function App() {
         setSelected(s.selected);
         setSort(s.sort);
         setDisplay(s.display);
-        setLimit(typeof s.limit    === 'number' ? s.limit    : 0);
-        setResCap(typeof s.resCap  === 'number' ? s.resCap   : 0);
+        setLimit(typeof s.limit         === 'number' ? s.limit         : 0);
+        setTierTop(typeof s.tierTop     === 'number' ? s.tierTop       : 0);
+        setTierBalanced(typeof s.tierBalanced === 'number' ? s.tierBalanced : 0);
         setAddonCap(typeof s.addonCap === 'number' ? s.addonCap : 0);
         setDebug(Boolean(s.debug));
-        setDiversify(Boolean(s.diversify));
         setFilters(s.filters && typeof s.filters === 'object'
           ? { ...DEFAULT_FILTERS, ...s.filters } : DEFAULT_FILTERS);
         setAddonTimeouts(s.addonTimeouts && typeof s.addonTimeouts === 'object' ? s.addonTimeouts : {});
@@ -1318,7 +1314,7 @@ function App() {
   // --- Derived values ---
   const validAddons = selected.filter((a) => a.url && isValidUrl(a.url));
   const addonUrls   = validAddons.map((a) => a.url);
-  const configB64   = buildConfig(addonUrls, sort, display, { limit, resCap, addonCap, debug, diversify, filters, addonTimeouts });
+  const configB64   = buildConfig(addonUrls, sort, display, { limit, tierTop, tierBalanced, addonCap, debug, filters, addonTimeouts });
 
   // --- Stream preview ---
   useEffect(() => {
@@ -1478,12 +1474,12 @@ function App() {
           </button>
         </div>
         <FiltersSection
-          filters={filters}     setFilters={setFilters}
-          limit={limit}         setLimit={setLimit}
-          resCap={resCap}       setResCap={setResCap}
-          addonCap={addonCap}   setAddonCap={setAddonCap}
-          debug={debug}         setDebug={setDebug}
-          diversify={diversify} setDiversify={setDiversify}
+          filters={filters}             setFilters={setFilters}
+          limit={limit}                 setLimit={setLimit}
+          tierTop={tierTop}             setTierTop={setTierTop}
+          tierBalanced={tierBalanced}   setTierBalanced={setTierBalanced}
+          addonCap={addonCap}           setAddonCap={setAddonCap}
+          debug={debug}                 setDebug={setDebug}
         />
       </section>
 
@@ -1589,14 +1585,11 @@ function App() {
               {limit > 0 && (
                 <span className="px-2 py-0.5 rounded bg-panel border border-border">limit: {limit}</span>
               )}
-              {resCap > 0 && (
-                <span className="px-2 py-0.5 rounded bg-panel border border-border">res-cap: {resCap}</span>
+              {(tierTop > 0 || tierBalanced > 0) && (
+                <span className="px-2 py-0.5 rounded bg-panel border border-border">tiers: {tierTop}T+{tierBalanced}B</span>
               )}
               {addonCap > 0 && (
                 <span className="px-2 py-0.5 rounded bg-panel border border-border">addon-cap: {addonCap}</span>
-              )}
-              {diversify && (
-                <span className="px-2 py-0.5 rounded bg-panel border border-border">diverse</span>
               )}
               {debug && (
                 <span className="px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/30 text-amber-400">debug</span>
@@ -1638,11 +1631,11 @@ function App() {
                 {JSON.stringify(
                   {
                     addons: addonUrls, sort, display,
-                    ...(limit    > 0 ? { limit }    : {}),
-                    ...(resCap   > 0 ? { resCap }   : {}),
-                    ...(addonCap > 0 ? { addonCap } : {}),
-                    ...(debug        ? { debug }     : {}),
-                    ...(diversify    ? { diversify } : {}),
+                    ...(limit        > 0 ? { limit }        : {}),
+                    ...(tierTop      > 0 ? { tierTop }      : {}),
+                    ...(tierBalanced > 0 ? { tierBalanced } : {}),
+                    ...(addonCap     > 0 ? { addonCap }     : {}),
+                    ...(debug            ? { debug }        : {}),
                     ...(hasActiveFilters ? { filters } : {}),
                   },
                   null, 2
