@@ -106,7 +106,7 @@ export default async function handler(req, res) {
         allStreams.push(...slice.map(s => ({
           ...s,
           _addonIdx: i,
-          title: s.title || s.description || '',
+          _addonUrl: addons[i],
         })));
       }
     }

@@ -2,7 +2,7 @@
 // Stream sorting: split-sort by cache status, trash/bloat penalties, automatic sub-tiers.
 
 import {
-  isCachedDebrid, isEnglishAudio, hasEmbeddedSubs,
+  getCacheTier, isCachedDebrid, isEnglishAudio, hasEmbeddedSubs,
   extractResolution, extractSourceQuality, extractSeeders, extractSizeGb,
   QUALITY_ORDER, HDR_TAGS, AUDIO_TAGS, CODEC_TAGS,
 } from './parse.js';
@@ -24,7 +24,7 @@ export const BLOAT_GB = {
 // ---------------------------------------------------------------------------
 
 function getHdrTier(stream) {
-  const haystack = `${stream.name ?? ''} ${stream.title ?? ''}`;
+  const haystack = `${stream.name ?? ''} ${stream.title ?? ''} ${stream.description ?? ''} ${stream.behaviorHints?.filename ?? ''}`;
   for (let i = 0; i < HDR_TAGS.length; i++) {
     if (HDR_TAGS[i][0].test(haystack)) return i;
   }
@@ -32,7 +32,7 @@ function getHdrTier(stream) {
 }
 
 function getAudioTier(stream) {
-  const haystack = `${stream.name ?? ''} ${stream.title ?? ''}`;
+  const haystack = `${stream.name ?? ''} ${stream.title ?? ''} ${stream.description ?? ''} ${stream.behaviorHints?.filename ?? ''}`;
   for (let i = 0; i < AUDIO_TAGS.length; i++) {
     if (AUDIO_TAGS[i][0].test(haystack)) return i;
   }
@@ -40,7 +40,7 @@ function getAudioTier(stream) {
 }
 
 function getCodecTier(stream) {
-  const haystack = `${stream.name ?? ''} ${stream.title ?? ''}`;
+  const haystack = `${stream.name ?? ''} ${stream.title ?? ''} ${stream.description ?? ''} ${stream.behaviorHints?.filename ?? ''}`;
   for (let i = 0; i < CODEC_TAGS.length; i++) {
     if (CODEC_TAGS[i][0].test(haystack)) return i;
   }
@@ -136,9 +136,10 @@ export function sortStreams(streams, sortCriteria, type = 'movie') {
   // Split-sort: if 'cached' is in criteria, sort each half independently then concat.
   // This guarantees all cached streams appear before uncached, regardless of other criteria.
   if (criteria.includes('cached')) {
-    const cached   = streams.filter(s =>  isCachedDebrid(s));
-    const uncached = streams.filter(s => !isCachedDebrid(s));
-    return [...cached.sort(cmp), ...uncached.sort(cmp)];
+    const cached   = streams.filter(s => getCacheTier(s) === 'cached');
+    const download = streams.filter(s => getCacheTier(s) === 'download');
+    const p2p      = streams.filter(s => getCacheTier(s) === 'p2p');
+    return [...cached.sort(cmp), ...download.sort(cmp), ...p2p.sort(cmp)];
   }
 
   return [...streams].sort(cmp);

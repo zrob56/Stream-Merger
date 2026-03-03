@@ -2,7 +2,7 @@
 // BingeGroup normalization, stream display formatting, and stream sanitization.
 
 import {
-  extractResolution, formatTagsWithIcons, isCachedDebrid,
+  extractResolution, formatTagsWithIcons, getCacheTier, isCachedDebrid,
   extractSeeders, extractSizeGb, RESOLUTION_ICONS,
 } from './parse.js';
 
@@ -50,40 +50,51 @@ export function formatStreamDisplay(streams, display) {
     const nameParts = [];
 
     if (show.has('source')) {
-      const src = stream._sources?.length
-        ? stream._sources.join(' + ')
-        : (stream.name ?? '').split('\n')[0].trim();
+      const rawName   = (stream.name ?? '').split('\n')[0].trim();
+      const cleanName = rawName.replace(/\[.*?\]/g, '').trim();
+      let src = cleanName;
+      if (!src && stream._addonUrl) {
+        try { src = new URL(stream._addonUrl).hostname; } catch { src = stream._addonUrl; }
+      }
       if (src) nameParts.push(src);
     }
     if (show.has('resolution')) {
-      const res  = extractResolution(stream);
+      const res = extractResolution(stream);
       if (res !== 'unknown') {
         const icon = RESOLUTION_ICONS[res] ?? '';
         nameParts.push(icon ? `${icon} ${res.toUpperCase()}` : res.toUpperCase());
       }
     }
-    if (show.has('cached') && isCachedDebrid(stream)) {
-      nameParts.push('⚡');
+    if (show.has('cached')) {
+      const tier = getCacheTier(stream);
+      if (tier === 'cached')   nameParts.push('⚡');
+      if (tier === 'download') nameParts.push('⏳');
     }
 
     const titleParts = [];
 
     if (show.has('filename')) {
-      const fn = (stream.title ?? '').split('\n')[0].trim();
+      // Prefer the raw torrent filename stored in behaviorHints; fall back to
+      // first line of stream.title (which is the next cleanest field).
+      const fn = stream.behaviorHints?.filename || (stream.title ?? '').split('\n')[0].trim();
       if (fn) titleParts.push(fn);
     }
     if (show.has('tags')) {
       const t = formatTagsWithIcons(stream);
       if (t) titleParts.push(t);
     }
+
+    // Seeders + size on one line
+    const bottomLine = [];
     if (show.has('seeders')) {
       const s = extractSeeders(stream);
-      if (s > 0) titleParts.push(`👤 ${s}`);
+      if (s > 0) bottomLine.push(`👤 ${s}`);
     }
     if (show.has('size')) {
       const gb = extractSizeGb(stream);
-      if (gb > 0) titleParts.push(`💾 ${gb} GB`);
+      if (gb > 0) bottomLine.push(`💾 ${gb.toFixed(2)} GB`);
     }
+    if (bottomLine.length) titleParts.push(bottomLine.join('   '));
 
     return {
       ...stream,
@@ -105,7 +116,7 @@ export function formatStreamDisplay(streams, display) {
  * @param {object} stream
  * @returns {object}
  */
-export function sanitizeStream({ _addonIdx, _sources, description, ...s }) {
+export function sanitizeStream({ _addonIdx, _addonUrl, _sources, description, ...s }) {
   if (s.url) {
     delete s.infoHash;
     delete s.fileIdx;

@@ -1,7 +1,7 @@
 // api/utils/parse.js
 // Shared constants, tag extractors, signal detectors, and request helpers.
 
-export const FETCH_TIMEOUT_MS = 7000;
+export const FETCH_TIMEOUT_MS = 6500;
 
 export const DISPLAY_DEFAULTS = ['source', 'resolution', 'cached', 'tags', 'filename', 'seeders', 'size'];
 
@@ -58,53 +58,65 @@ export const AUDIO_LABELS  = AUDIO_TAGS.map(([, label]) => label); // ['Atmos','
 const ALL_TAGS = [...SOURCE_TAGS, ...HDR_TAGS, ...CODEC_TAGS, ...AUDIO_TAGS];
 
 // ---------------------------------------------------------------------------
+// Universal haystack — used by all extract + signal functions
+// ---------------------------------------------------------------------------
+function getHaystack(stream) {
+  return `${stream.name ?? ''} ${stream.title ?? ''} ${stream.description ?? ''} ${stream.behaviorHints?.filename ?? ''}`.toLowerCase();
+}
+
+// ---------------------------------------------------------------------------
 // Extract functions
 // ---------------------------------------------------------------------------
 
 export function extractResolution(stream) {
-  const haystack = `${stream.name ?? ''} ${stream.title ?? ''}`;
-  if (/\b(4k|2160p|uhd)\b/i.test(haystack))  return '4k';
-  if (/\b(1080p|fhd)\b/i.test(haystack))      return '1080p';
-  if (/\b(720p|hd)\b/i.test(haystack))        return '720p';
-  if (/\b(480p)\b/i.test(haystack))           return '480p';
-  if (/\b(360p)\b/i.test(haystack))           return '360p';
+  const h = getHaystack(stream);
+  if (/\b(4k|2160p|uhd)\b/.test(h))  return '4k';
+  if (/\b(1080p|fhd)\b/.test(h))     return '1080p';
+  if (/\b(720p|hd)\b/.test(h))       return '720p';
+  if (/\b(480p)\b/.test(h))          return '480p';
+  if (/\b(360p)\b/.test(h))          return '360p';
   return 'unknown';
 }
 
 export function extractSourceQuality(stream) {
-  const haystack = `${stream.name ?? ''} ${stream.title ?? ''}`;
+  const h = getHaystack(stream);
   for (const [re, label] of SOURCE_TAGS) {
-    if (re.test(haystack)) return label;
+    if (re.test(h)) return label;
   }
   return 'unknown';
 }
 
 export function extractSizeGb(stream) {
-  const match = `${stream.title ?? ''}`.match(/([\d.]+)\s*gb/i);
-  return match ? parseFloat(match[1]) : 0;
+  const h = getHaystack(stream);
+  const matchGb = h.match(/([\d.]+)\s*gb/);
+  if (matchGb) return parseFloat(matchGb[1]);
+  const matchMb = h.match(/([\d.]+)\s*mb/);
+  if (matchMb) return parseFloat(matchMb[1]) / 1024;
+  return 0;
 }
 
 export function extractSeeders(stream) {
-  const match = `${stream.title ?? ''}`.match(/👤\s*(\d+)/);
+  const h = getHaystack(stream);
+  const match = h.match(/(?:👤|s:|seeders:)\s*(\d+)/);
   return match ? parseInt(match[1], 10) : 0;
 }
 
 export function extractQualityTags(stream) {
-  const haystack = `${stream.name ?? ''} ${stream.title ?? ''}`;
+  const h = getHaystack(stream);
   const tags = [];
   for (const [re, label] of ALL_TAGS) {
-    if (re.test(haystack)) tags.push(label);
+    if (re.test(h)) tags.push(label);
   }
   return tags;
 }
 
 export function formatTagsWithIcons(stream) {
-  const haystack = `${stream.name ?? ''} ${stream.title ?? ''}`;
+  const h = getHaystack(stream);
   const parts = [];
-  const src   = SOURCE_TAGS.filter(([re]) => re.test(haystack)).map(([, l]) => l);
-  const hdr   = HDR_TAGS.filter(([re]) => re.test(haystack)).map(([, l]) => l);
-  const codec = CODEC_TAGS.filter(([re]) => re.test(haystack)).map(([, l]) => l);
-  const audio = AUDIO_TAGS.filter(([re]) => re.test(haystack)).map(([, l]) => l);
+  const src   = SOURCE_TAGS.filter(([re]) => re.test(h)).map(([, l]) => l);
+  const hdr   = HDR_TAGS.filter(([re]) => re.test(h)).map(([, l]) => l);
+  const codec = CODEC_TAGS.filter(([re]) => re.test(h)).map(([, l]) => l);
+  const audio = AUDIO_TAGS.filter(([re]) => re.test(h)).map(([, l]) => l);
   if (src.length)   parts.push(`🎬 ${src.join(' · ')}`);
   if (hdr.length)   parts.push(`✨ ${hdr.join(' · ')}`);
   if (codec.length) parts.push(`🎞️ ${codec.join(' · ')}`);
@@ -116,30 +128,43 @@ export function formatTagsWithIcons(stream) {
 // Signal detectors
 // ---------------------------------------------------------------------------
 
+export function getCacheTier(stream) {
+  const h = getHaystack(stream);
+
+  // Explicit uncached/download markers — check first
+  if (/\b(uncached|download)\b/.test(h)) return 'download';
+
+  // Explicit cached labels
+  if (
+    h.includes('cached') ||
+    h.includes('⚡') ||
+    h.includes('🟢') ||
+    h.includes('rd+') ||
+    h.includes('ad+') ||
+    h.includes('pm+') ||
+    h.includes('dl+') ||
+    h.includes('tb+') ||
+    /\[(rd|ad|pm|dl|tb)\]/.test(h)
+  ) return 'cached';
+
+  // Structural auto-detection: direct HTTP URL with no infoHash = debrid/direct link
+  if (typeof stream.url === 'string' && !stream.infoHash && !stream.url.startsWith('magnet:')) {
+    return 'cached';
+  }
+
+  return 'p2p';
+}
+
 export function isCachedDebrid(stream) {
-  const haystack = `${stream.name ?? ''} ${stream.title ?? ''}`.toLowerCase();
-  return (
-    haystack.includes('cached') ||
-    haystack.includes('⚡') ||
-    haystack.includes('🟢') ||
-    haystack.includes('rd+') ||
-    haystack.includes('[rd]') ||
-    haystack.includes('[ad]') ||
-    haystack.includes('[pm]') ||
-    haystack.includes('[dl]') ||
-    haystack.includes('[tb]') ||
-    haystack.includes('debrid')
-  );
+  return getCacheTier(stream) === 'cached';
 }
 
 export function isEnglishAudio(stream) {
-  const haystack = `${stream.name ?? ''} ${stream.title ?? ''}`;
-  return /\benglish\b|\beng\b/i.test(haystack);
+  return /\b(english|eng)\b/.test(getHaystack(stream));
 }
 
 export function hasEmbeddedSubs(stream) {
-  const haystack = `${stream.name ?? ''} ${stream.title ?? ''}`;
-  return /\bsubs?\b|\bsubtitles?\b|\bhardcoded\b/i.test(haystack);
+  return /\b(subs?|subtitles?|hardcoded|esub)\b/.test(getHaystack(stream));
 }
 
 // ---------------------------------------------------------------------------
