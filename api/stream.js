@@ -73,6 +73,11 @@ export default async function handler(req, res) {
     return;
   }
 
+  let clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '';
+  if (clientIp.includes(',')) {
+    clientIp = clientIp.split(',')[0].trim();
+  }
+
   // Short ID resolution: 8 hex chars → look up full config in Redis
   let resolvedConfig = rawConfig;
   if (rawConfig.length === 8 && /^[a-f0-9]{8}$/.test(rawConfig)) {
@@ -117,7 +122,7 @@ export default async function handler(req, res) {
   const fetchPromises = addons.map((manifestUrl) => {
     const streamUrl = buildStreamUrl(manifestUrl, type, stremioId);
     const timeout = addonTimeouts[manifestUrl] ?? FETCH_TIMEOUT_MS;
-    return fetchWithTimeout(streamUrl, timeout);
+    return fetchWithTimeout(streamUrl, timeout, clientIp);
   });
 
   const results = await Promise.allSettled(fetchPromises);

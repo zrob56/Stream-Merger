@@ -302,15 +302,22 @@ export function buildStreamUrl(manifestUrl, type, id) {
   return `${base}/stream/${type}/${id}.json`;
 }
 
-export function fetchWithTimeout(url, timeoutMs = FETCH_TIMEOUT_MS) {
+export function fetchWithTimeout(url, timeoutMs = FETCH_TIMEOUT_MS, clientIp = null) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Stremio/4.4.168'
+  };
+
+  if (clientIp) {
+    headers['X-Forwarded-For'] = clientIp;
+    headers['X-Real-IP'] = clientIp;
+  }
+
   return fetch(url, {
     signal: controller.signal,
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Stremio/4.4.168'
-    }
+    headers
   })
     .then((res) => {
       if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
