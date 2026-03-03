@@ -249,6 +249,43 @@ function InstallButton({ manifestUrl }) {
   );
 }
 
+function ShortenButton({ configB64, onShorten }) {
+  const [status, setStatus] = useState('idle'); // idle | loading | done | error
+
+  const handleClick = async () => {
+    if (status === 'loading' || status === 'done') return;
+    setStatus('loading');
+    try {
+      const r = await fetch('/api/save-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config: configB64 }),
+      });
+      const data = await r.json();
+      if (!r.ok || !data.shortUrl) throw new Error(data.error ?? 'Unknown error');
+      onShorten(data.shortUrl);
+      setStatus('done');
+    } catch {
+      setStatus('error');
+    }
+  };
+
+  if (status === 'done') {
+    return <span className="text-xs text-emerald-400 px-2 py-0.5">✓ Shortened</span>;
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={status === 'loading'}
+      className="shrink-0 px-3 py-1.5 rounded border border-border text-xs text-zinc-400
+                 hover:border-zinc-400 hover:text-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition"
+    >
+      {status === 'loading' ? 'Shortening…' : status === 'error' ? 'Error — retry' : 'Shorten URL'}
+    </button>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Preset quick-start row
 // ---------------------------------------------------------------------------
@@ -1177,6 +1214,7 @@ function App() {
   const [addonHealth,    setAddonHealth]    = useState({});
   const [preview,        setPreview]        = useState({ status: 'idle', count: 0, error: '' });
   const [previewId,      setPreviewId]      = useState('tt0468569:movie');
+  const [shortUrl,       setShortUrl]       = useState(null);
 
   // Saved presets (localStorage-backed)
   const [savedPresets, setSavedPresets] = useState(() => {
@@ -1340,6 +1378,8 @@ function App() {
     }
   };
   const manifestUrl = buildManifestUrl(origin, configB64);
+  useEffect(() => { setShortUrl(null); }, [configB64]);
+  const displayedManifestUrl = shortUrl ?? manifestUrl;
   const isReady     = validAddons.length > 0;
 
   const hasActiveFilters = filters.cachedOnly || filters.minSeeders > 0 || filters.maxSizeGb > 0 || !!filters.minResolution
@@ -1488,9 +1528,15 @@ function App() {
               <p className="text-xs text-zinc-500 mb-1.5">Manifest URL</p>
               <div className="flex items-center gap-2">
                 <code className="flex-1 text-xs text-zinc-300 break-all leading-relaxed">
-                  {manifestUrl}
+                  {displayedManifestUrl}
                 </code>
-                <CopyButton text={manifestUrl} />
+                <CopyButton text={displayedManifestUrl} />
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <ShortenButton key={configB64} configB64={configB64} onShorten={setShortUrl} />
+                {shortUrl && (
+                  <span className="text-xs text-zinc-500">Shortened — change any setting to restore full URL</span>
+                )}
               </div>
             </div>
 
@@ -1583,10 +1629,10 @@ function App() {
 
             {/* Install buttons */}
             <div className="flex flex-wrap gap-3">
-              <InstallButton manifestUrl={manifestUrl} />
-              <CopyButton text={manifestUrl.replace(/^https?:\/\//, 'stremio://')} />
+              <InstallButton manifestUrl={displayedManifestUrl} />
+              <CopyButton text={displayedManifestUrl.replace(/^https?:\/\//, 'stremio://')} />
               <a
-                href={`https://web.stremio.com/#/?addonOpen=${encodeURIComponent(manifestUrl)}`}
+                href={`https://web.stremio.com/#/?addonOpen=${encodeURIComponent(displayedManifestUrl)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-4 py-2 rounded border border-border text-zinc-300 hover:border-zinc-400
