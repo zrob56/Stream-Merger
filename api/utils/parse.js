@@ -180,7 +180,7 @@ export function getCacheTier(stream) {
   const h = getHaystack(stream);
 
   // Explicit uncached/download markers — check first
-  if (/\b(uncached|download)\b/.test(h)) return 'download';
+  if (/\b(uncached|download)\b/.test(h) || /\[download\]/.test(h) || /\[rd download\]/.test(h) || /\[uncached\]/.test(h)) return 'download';
 
   // Explicit cached labels
   if (
