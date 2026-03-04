@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "regions": ["sfo1"],
   "routes": [
     {
       "src": "/stremio/([^/]+)/manifest\\.json",
