@@ -71,48 +71,46 @@ function isBloat(stream, type) {
 // Core comparator (shared by both split-sort halves)
 // ---------------------------------------------------------------------------
 
-function makeComparator(criteria, type) {
+function makeComparator(criteria) {
   return (a, b) => {
     // Outermost: trash and bloat penalties
-    const trashDiff = (isTrash(a) ? 1 : 0) - (isTrash(b) ? 1 : 0);
+    const trashDiff = (a._isTrash ? 1 : 0) - (b._isTrash ? 1 : 0);
     if (trashDiff !== 0) return trashDiff;
 
-    const bloatDiff = (isBloat(a, type) ? 1 : 0) - (isBloat(b, type) ? 1 : 0);
+    const bloatDiff = (a._isBloat ? 1 : 0) - (b._isBloat ? 1 : 0);
     if (bloatDiff !== 0) return bloatDiff;
 
-    // User criteria (skip 'cached' — handled by split-sort, not comparator)
+    // User criteria
     for (const criterion of criteria) {
       if (criterion === 'cached') continue;
       let diff = 0;
       if (criterion === 'resolution') {
-        diff = QUALITY_ORDER.indexOf(extractResolution(a))
-             - QUALITY_ORDER.indexOf(extractResolution(b));
+        diff = QUALITY_ORDER.indexOf(a._res) - QUALITY_ORDER.indexOf(b._res);
       } else if (criterion === 'size') {
-        diff = extractSizeGb(b) - extractSizeGb(a);
+        diff = b._size - a._size;
       } else if (criterion === 'seeders') {
-        diff = extractSeeders(b) - extractSeeders(a);
+        diff = b._seeders - a._seeders;
       } else if (criterion === 'source') {
-        diff = SOURCE_QUALITY_ORDER.indexOf(extractSourceQuality(a))
-             - SOURCE_QUALITY_ORDER.indexOf(extractSourceQuality(b));
+        diff = SOURCE_QUALITY_ORDER.indexOf(a._source) - SOURCE_QUALITY_ORDER.indexOf(b._source);
       } else if (criterion === 'english') {
-        diff = (isEnglishAudio(b) ? 1 : 0) - (isEnglishAudio(a) ? 1 : 0);
+        diff = (b._isEng ? 1 : 0) - (a._isEng ? 1 : 0);
       } else if (criterion === 'subs') {
-        diff = (hasEmbeddedSubs(b) ? 1 : 0) - (hasEmbeddedSubs(a) ? 1 : 0);
+        diff = (b._hasSubs ? 1 : 0) - (a._hasSubs ? 1 : 0);
       }
       if (diff !== 0) return diff;
     }
 
     // Automatic sub-tiers: HDR → Audio → Codec
-    const hdrDiff = getHdrTier(a) - getHdrTier(b);
+    const hdrDiff = a._hdrTier - b._hdrTier;
     if (hdrDiff !== 0) return hdrDiff;
 
-    const audioDiff = getAudioTier(a) - getAudioTier(b);
+    const audioDiff = a._audioTier - b._audioTier;
     if (audioDiff !== 0) return audioDiff;
 
-    const codecDiff = getCodecTier(a) - getCodecTier(b);
+    const codecDiff = a._codecTier - b._codecTier;
     if (codecDiff !== 0) return codecDiff;
 
-    // Final tiebreaker: addon order (lower = higher priority)
+    // Final tiebreaker: addon order
     return (a._addonIdx ?? 999) - (b._addonIdx ?? 999);
   };
 }
@@ -131,16 +129,33 @@ function makeComparator(criteria, type) {
  */
 export function sortStreams(streams, sortCriteria, type = 'movie') {
   const criteria = Array.isArray(sortCriteria) ? sortCriteria : [sortCriteria];
-  const cmp = makeComparator(criteria, type);
+  const cmp = makeComparator(criteria);
 
-  // Split-sort: if 'cached' is in criteria, sort each half independently then concat.
-  // This guarantees all cached streams appear before uncached, regardless of other criteria.
+  // 1. One-pass pre-calculation to save CPU cycles during sorting
+  const memoized = streams.map(s => {
+    // We only attach these properties temporarily for the sort phase
+    s._cacheTier = getCacheTier(s);
+    s._isTrash = isTrash(s);
+    s._isBloat = isBloat(s, type);
+    s._res = extractResolution(s);
+    s._size = extractSizeGb(s);
+    s._seeders = extractSeeders(s);
+    s._source = extractSourceQuality(s);
+    s._isEng = isEnglishAudio(s);
+    s._hasSubs = hasEmbeddedSubs(s);
+    s._hdrTier = getHdrTier(s);
+    s._audioTier = getAudioTier(s);
+    s._codecTier = getCodecTier(s);
+    return s;
+  });
+
+  // 2. Split-sort using the memoized properties
   if (criteria.includes('cached')) {
-    const cached   = streams.filter(s => getCacheTier(s) === 'cached');
-    const download = streams.filter(s => getCacheTier(s) === 'download');
-    const p2p      = streams.filter(s => getCacheTier(s) === 'p2p');
+    const cached   = memoized.filter(s => s._cacheTier === 'cached');
+    const download = memoized.filter(s => s._cacheTier === 'download');
+    const p2p      = memoized.filter(s => s._cacheTier === 'p2p');
     return [...cached.sort(cmp), ...download.sort(cmp), ...p2p.sort(cmp)];
   }
 
-  return [...streams].sort(cmp);
+  return memoized.sort(cmp);
 }
