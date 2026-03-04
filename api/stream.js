@@ -46,6 +46,7 @@ function identifyAddonName(stream, manifestUrl) {
   if (haystack.includes('torrentio'))     return 'Torrentio';
   if (haystack.includes('comet'))         return 'Comet';
   if (haystack.includes('mediafusion'))   return 'MediaFusion';
+  if (haystack.includes('meteor'))        return 'Meteor';
   if (haystack.includes('jackettio'))     return 'Jackettio';
   if (haystack.includes('knightcrawler')) return 'KnightCrawler';
   if (haystack.includes('annatar'))       return 'Annatar';
