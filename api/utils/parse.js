@@ -1,7 +1,7 @@
 // api/utils/parse.js
 // Shared constants, tag extractors, signal detectors, and request helpers.
 
-export const FETCH_TIMEOUT_MS = 6500;
+export const FETCH_TIMEOUT_MS = 3500;
 
 export const DISPLAY_DEFAULTS = ['source', 'resolution', 'cached', 'tags', 'filename', 'seeders', 'size'];
 
