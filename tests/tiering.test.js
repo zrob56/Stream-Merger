@@ -66,3 +66,21 @@ test('unknown size/runtime streams are classified unknown and backfilled', () =>
   const selected = applySmartTiering(streams, 1, 1, 1, { runtimeMinutes: 0 });
   assert.equal(selected.length, 3);
 });
+
+test('top-classified streams do not consume balanced/efficient slots before those tiers are filled', () => {
+  const runtimeMinutes = 120;
+  const streams = [
+    makeStream('Top A', 20, '1080p'),      // ~22.8 Mbps -> top
+    makeStream('Top B', 18, '1080p'),      // ~20.5 Mbps -> top
+    makeStream('Balanced A', 5, '1080p'),  // ~5.7 Mbps  -> balanced
+    makeStream('Efficient A', 1, '1080p'), // ~1.1 Mbps  -> efficient
+  ];
+
+  const selected = applySmartTiering(streams, 1, 1, 1, { runtimeMinutes });
+  const names = selected.map(s => s.name);
+
+  assert.equal(selected.length, 3);
+  assert.ok(names.some(n => n.includes('Top A') || n.includes('Top B')));
+  assert.ok(names.some(n => n.includes('Balanced A')));
+  assert.ok(names.some(n => n.includes('Efficient A')));
+});

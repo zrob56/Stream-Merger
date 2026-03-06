@@ -210,7 +210,9 @@ export function applySmartTiering(streams, tierTop, tierBalanced, tierEfficient,
       }
     }
 
-    const selected  = [];
+    const topStreams = [];
+    const balancedStreams = [];
+    const efficientStreams = [];
     const leftovers = [];
     let topCount = 0, balancedCount = 0, efficientCount = 0;
 
@@ -221,22 +223,36 @@ export function applySmartTiering(streams, tierTop, tierBalanced, tierEfficient,
         continue;
       }
 
-      if (tier === 'top') {
-        if      (topCount       < tierTop)       { selected.push(s); topCount++; }
-        else if (balancedCount  < tierBalanced)  { selected.push(s); balancedCount++; }
-        else if (efficientCount < tierEfficient) { selected.push(s); efficientCount++; }
-        else leftovers.push(s);
-      } else if (tier === 'balanced') {
-        if      (balancedCount  < tierBalanced)  { selected.push(s); balancedCount++; }
-        else if (topCount       < tierTop)       { selected.push(s); topCount++; }
-        else if (efficientCount < tierEfficient) { selected.push(s); efficientCount++; }
-        else leftovers.push(s);
-      } else {
-        if      (efficientCount < tierEfficient) { selected.push(s); efficientCount++; }
-        else if (balancedCount  < tierBalanced)  { selected.push(s); balancedCount++; }
-        else if (topCount       < tierTop)       { selected.push(s); topCount++; }
-        else leftovers.push(s);
+      if (tier === 'top') topStreams.push(s);
+      else if (tier === 'balanced') balancedStreams.push(s);
+      else efficientStreams.push(s);
+    }
+
+    const selected = [];
+
+    for (const s of topStreams) {
+      if (topCount >= tierTop) {
+        leftovers.push(s);
+        continue;
       }
+      selected.push(s);
+      topCount++;
+    }
+    for (const s of balancedStreams) {
+      if (balancedCount >= tierBalanced) {
+        leftovers.push(s);
+        continue;
+      }
+      selected.push(s);
+      balancedCount++;
+    }
+    for (const s of efficientStreams) {
+      if (efficientCount >= tierEfficient) {
+        leftovers.push(s);
+        continue;
+      }
+      selected.push(s);
+      efficientCount++;
     }
 
     const needed = (tierTop + tierBalanced + tierEfficient) - selected.length;
