@@ -119,11 +119,82 @@ export default async function handler(req, res) {
   // Build the full Stremio-format id used in sub-addon requests
   const stremioId = season && episode ? `${imdbId}:${season}:${episode}` : imdbId;
 
-  // --- Parallel fetch ---
-  const fetchPromises = addons.map((manifestUrl) => {
+// --- Parallel fetch ---
+  const abortController = new AbortController();
+  let accumulatedStreams = [];
+  const tierSlots = tierTop + tierBalanced + tierEfficient;
+  const fallbackTarget = limit > 0 ? limit : 15;
+
+  const fetchPromises = addons.map((manifestUrl, i) => {
     const streamUrl = buildStreamUrl(manifestUrl, type, stremioId);
     const timeout = addonTimeouts[manifestUrl] ?? FETCH_TIMEOUT_MS;
-    return fetchWithTimeout(streamUrl, timeout, clientIp);
+
+    return fetchWithTimeout(streamUrl, timeout, clientIp, abortController.signal)
+      .then(result => {
+        const rawStreams = result?.streams;
+        if (Array.isArray(rawStreams) && rawStreams.length > 0) {
+          
+          const preppedStreams = rawStreams.map(s => ({
+            ...s,
+            _addonName: identifyAddonName(s, addons[i]),
+            _trustProxies: trustProxies,
+          }));
+
+          const survivors = applyFilters(preppedStreams, filters);
+          accumulatedStreams.push(...survivors);
+          const currentDeduped = deduplicateStreams(accumulatedStreams);
+
+          if (tierSlots > 0) {
+            const resGroups = { '4k': [], '1080p': [] };
+            for (const s of currentDeduped) {
+              const r = extractResolution(s);
+              if (resGroups[r]) resGroups[r].push(s);
+            }
+
+            let perfectDistributionMet = false;
+
+            for (const r of ['4k', '1080p']) {
+              const group = resGroups[r];
+              if (group.length < tierSlots) continue;
+
+              let maxSize = 0;
+              for (const s of group) {
+                const sz = extractSizeGb(s);
+                if (sz > maxSize) maxSize = sz;
+              }
+
+              let bThresh = maxSize * 0.5;
+              bThresh = r === '4k' ? Math.max(bThresh, 25) : Math.max(bThresh, 12);
+
+              let eThresh = maxSize * 0.25;
+              eThresh = r === '4k' ? Math.min(Math.max(eThresh, 3), 8) : Math.min(Math.max(eThresh, 1), 3);
+
+              let topC = 0, balC = 0, effC = 0;
+              for (const s of group) {
+                const sz = extractSizeGb(s);
+                if (sz > 0 && sz <= eThresh) effC++;
+                else if (sz > 0 && sz <= bThresh) balC++;
+                else topC++; 
+              }
+
+              if (topC >= tierTop && balC >= tierBalanced && effC >= tierEfficient) {
+                perfectDistributionMet = true;
+                break;
+              }
+            }
+
+            if (perfectDistributionMet) {
+              abortController.abort();
+            }
+          } else {
+            if (currentDeduped.length >= fallbackTarget) {
+              abortController.abort();
+            }
+          }
+        }
+        return result;
+      })
+      .catch(() => ({ streams: [] })); // Catch aborts silently so Promise.allSettled doesn't fail
   });
 
   const results = await Promise.allSettled(fetchPromises);
@@ -162,13 +233,25 @@ export default async function handler(req, res) {
     });
   }
 
-  // --- Consolidation pipeline ---
+// --- Consolidation pipeline ---
   // Order matters: sort/dedup/bingeGroup read the original name/title;
   // formatStreamDisplay must run last so it doesn't corrupt those reads.
   const sorted      = sortStreams(allStreams, sort, type);
   const deduped     = deduplicateStreams(sorted);
-  const filtered    = applyFilters(deduped, filters);
-  const tiered      = applySmartTiering(filtered, tierTop, tierBalanced, tierEfficient);
+  let filtered      = applyFilters(deduped, filters);
+
+  // Fallback 1: If strict filters blocked everything, revert to deduped pool
+  if (filtered.length === 0 && deduped.length > 0) {
+    filtered = deduped;
+  }
+
+  let tiered        = applySmartTiering(filtered, tierTop, tierBalanced, tierEfficient);
+
+  // Fallback 2: If smart tiering blocked everything, revert to filtered pool
+  if (tiered.length === 0 && filtered.length > 0) {
+    tiered = filtered;
+  }
+
   const normalized  = normalizeBingeGroup(tiered, imdbId);
   const formatted   = formatStreamDisplay(normalized, display);
 
