@@ -9,7 +9,7 @@ import {
   QUALITY_ORDER, FETCH_TIMEOUT_MS,
 } from './utils/parse.js';
 import { sortStreams } from './utils/sort.js';
-import { deduplicateStreams, applyFilters, applySmartTiering } from './utils/filter.js';
+import { deduplicateStreams, applyFilters, applySmartTiering, classifyStreamTier } from './utils/filter.js';
 import { normalizeBingeGroup, formatStreamDisplay, sanitizeStream } from './utils/format.js';
 
 // ---------------------------------------------------------------------------
@@ -208,6 +208,7 @@ export default async function handler(req, res) {
   let accumulatedStreams = [];
   const tierSlots = tierTop + tierBalanced + tierEfficient;
   const fallbackTarget = limit > 0 ? limit : 15;
+  const runtimeMinutes = tierSlots > 0 ? await fetchRuntimeMinutes(type, imdbId) : 0;
 
   const fetchPromises = addons.map((manifestUrl, i) => {
     const streamUrl = buildStreamUrl(manifestUrl, type, stremioId);
@@ -241,24 +242,20 @@ export default async function handler(req, res) {
               const group = resGroups[r];
               if (group.length < tierSlots) continue;
 
-              let maxSize = 0;
-              for (const s of group) {
-                const sz = extractSizeGb(s);
-                if (sz > maxSize) maxSize = sz;
+              let groupMaxSizeGb = 0;
+              if (!(runtimeMinutes > 0)) {
+                for (const s of group) {
+                  const sz = extractSizeGb(s);
+                  if (sz > groupMaxSizeGb) groupMaxSizeGb = sz;
+                }
               }
-
-              let bThresh = maxSize * 0.5;
-              bThresh = r === '4k' ? Math.max(bThresh, 25) : Math.max(bThresh, 12);
-
-              let eThresh = maxSize * 0.25;
-              eThresh = r === '4k' ? Math.min(Math.max(eThresh, 3), 8) : Math.min(Math.max(eThresh, 1), 3);
 
               let topC = 0, balC = 0, effC = 0;
               for (const s of group) {
-                const sz = extractSizeGb(s);
-                if (sz > 0 && sz <= eThresh) effC++;
-                else if (sz > 0 && sz <= bThresh) balC++;
-                else topC++; 
+                const tier = classifyStreamTier(s, r, { runtimeMinutes, groupMaxSizeGb });
+                if (tier === 'efficient') effC++;
+                else if (tier === 'balanced') balC++;
+                else if (tier === 'top') topC++;
               }
 
               if (topC >= tierTop && balC >= tierBalanced && effC >= tierEfficient) {
@@ -329,9 +326,6 @@ export default async function handler(req, res) {
     filtered = deduped;
   }
 
-  const runtimeMinutes = (tierTop > 0 || tierBalanced > 0 || tierEfficient > 0)
-    ? await fetchRuntimeMinutes(type, imdbId)
-    : 0;
   let tiered        = applySmartTiering(filtered, tierTop, tierBalanced, tierEfficient, { runtimeMinutes });
 
   // Fallback 2: If smart tiering blocked everything, revert to filtered pool

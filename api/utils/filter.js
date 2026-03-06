@@ -134,12 +134,60 @@ export function deduplicateStreams(streams) {
 // Smart tiering
 // ---------------------------------------------------------------------------
 
-const BITRATE_TOP_MBPS = 25;
-const BITRATE_BALANCED_MBPS = 10;
+const BITRATE_THRESHOLDS_MBPS = {
+  '4k':    { topMin: 25, balancedMin: 8 },
+  '2160p': { topMin: 25, balancedMin: 8 },
+  // 1080p and below share the same bitrate model for now.
+  '1080p': { topMin: 12, balancedMin: 3 },
+  '720p':  { topMin: 12, balancedMin: 3 },
+  '480p':  { topMin: 12, balancedMin: 3 },
+  '360p':  { topMin: 12, balancedMin: 3 },
+  'unknown': { topMin: 12, balancedMin: 3 },
+};
 
-function applySmartTieringBySize(streams, tierTop, tierBalanced, tierEfficient) {
+function getSizeThresholds(resolution, groupMaxSizeGb) {
+  let balancedMaxGb = groupMaxSizeGb * 0.5;
+  if (resolution === '4k' || resolution === '2160p') balancedMaxGb = Math.max(balancedMaxGb, 25);
+  else if (resolution === '1080p')                   balancedMaxGb = Math.max(balancedMaxGb, 12);
+  else if (resolution === '720p')                    balancedMaxGb = Math.max(balancedMaxGb, 5);
+  else                                                balancedMaxGb = Math.max(balancedMaxGb, 2);
+
+  let efficientMaxGb = groupMaxSizeGb * 0.25;
+  if (resolution === '4k' || resolution === '2160p') efficientMaxGb = Math.min(Math.max(efficientMaxGb, 3), 8);
+  else if (resolution === '1080p')                   efficientMaxGb = Math.min(Math.max(efficientMaxGb, 1), 3);
+  else if (resolution === '720p')                    efficientMaxGb = Math.min(Math.max(efficientMaxGb, 0.5), 1.5);
+  else                                                efficientMaxGb = Math.min(Math.max(efficientMaxGb, 0.2), 1);
+
+  return { balancedMaxGb, efficientMaxGb };
+}
+
+export function classifyStreamTier(stream, resolution, options = {}) {
+  const runtimeMinutes = Number(options.runtimeMinutes ?? 0);
+
+  if (runtimeMinutes > 0) {
+    const mbps = extractBitrateMbps(stream, runtimeMinutes);
+    if (mbps <= 0) return 'unknown';
+
+    const t = BITRATE_THRESHOLDS_MBPS[resolution] ?? BITRATE_THRESHOLDS_MBPS.unknown;
+    if (mbps >= t.topMin) return 'top';
+    if (mbps >= t.balancedMin) return 'balanced';
+    return 'efficient';
+  }
+
+  const groupMaxSizeGb = Number(options.groupMaxSizeGb ?? 0);
+  const sizeGb = extractSizeGb(stream);
+  if (!(sizeGb > 0) || !(groupMaxSizeGb > 0)) return 'unknown';
+
+  const t = getSizeThresholds(resolution, groupMaxSizeGb);
+  if (sizeGb <= t.efficientMaxGb) return 'efficient';
+  if (sizeGb <= t.balancedMaxGb) return 'balanced';
+  return 'top';
+}
+
+export function applySmartTiering(streams, tierTop, tierBalanced, tierEfficient, options = {}) {
   if (tierTop <= 0 && tierBalanced <= 0 && tierEfficient <= 0) return streams;
 
+  const runtimeMinutes = Number(options.runtimeMinutes ?? 0);
   const keptStreams = new Set();
   const groups = new Map();
 
@@ -148,98 +196,37 @@ function applySmartTieringBySize(streams, tierTop, tierBalanced, tierEfficient) 
     const eps = extractEpisodes(s);
     const isPack = eps.length !== 1 ? 'pack' : 'single';
     const key = `${r}-${isPack}`;
-
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(s);
   }
 
   for (const [key, group] of groups.entries()) {
-    const r = key.split('-')[0];
-
-    let maxSize = 0;
-    for (const s of group) {
-      const sz = extractSizeGb(s);
-      if (sz > maxSize) maxSize = sz;
-    }
-
-    let balancedThreshold = maxSize * 0.5;
-    if (r === '4k' || r === '2160p') balancedThreshold = Math.max(balancedThreshold, 25);
-    else if (r === '1080p')          balancedThreshold = Math.max(balancedThreshold, 12);
-    else if (r === '720p')           balancedThreshold = Math.max(balancedThreshold, 5);
-    else                             balancedThreshold = Math.max(balancedThreshold, 2);
-
-    let effThresh = maxSize * 0.25;
-    if (r === '4k' || r === '2160p') effThresh = Math.min(Math.max(effThresh, 3), 8);
-    else if (r === '1080p')          effThresh = Math.min(Math.max(effThresh, 1), 3);
-    else if (r === '720p')           effThresh = Math.min(Math.max(effThresh, 0.5), 1.5);
-    else                             effThresh = Math.min(Math.max(effThresh, 0.2), 1);
-
-    const selected  = [];
-    const leftovers = [];
-    let topCount = 0, balancedCount = 0, efficientCount = 0;
-
-    for (const s of group) {
-      const sz = extractSizeGb(s);
-
-      if (sz > 0 && sz <= effThresh) {
-        if      (efficientCount < tierEfficient) { selected.push(s); efficientCount++; }
-        else if (balancedCount  < tierBalanced)  { selected.push(s); balancedCount++;  }
-        else if (topCount       < tierTop)       { selected.push(s); topCount++;       }
-        else leftovers.push(s);
-      } else if (sz > 0 && sz <= balancedThreshold) {
-        if      (balancedCount < tierBalanced) { selected.push(s); balancedCount++; }
-        else if (topCount      < tierTop)      { selected.push(s); topCount++;      }
-        else leftovers.push(s);
-      } else {
-        if (topCount < tierTop) { selected.push(s); topCount++; }
-        else leftovers.push(s);
+    const resolution = key.split('-')[0];
+    let groupMaxSizeGb = 0;
+    if (!(runtimeMinutes > 0)) {
+      for (const s of group) {
+        const sz = extractSizeGb(s);
+        if (sz > groupMaxSizeGb) groupMaxSizeGb = sz;
       }
     }
 
-    const needed = (tierTop + tierBalanced + tierEfficient) - selected.length;
-    for (let i = 0; i < needed && leftovers.length > 0; i++) selected.push(leftovers.shift());
-
-    for (const s of selected) keptStreams.add(s);
-  }
-
-  return streams.filter(s => keptStreams.has(s));
-}
-
-export function applySmartTiering(streams, tierTop, tierBalanced, tierEfficient, options = {}) {
-  if (tierTop <= 0 && tierBalanced <= 0 && tierEfficient <= 0) return streams;
-
-  const runtimeMinutes = Number(options.runtimeMinutes ?? 0);
-  if (!(runtimeMinutes > 0)) {
-    return applySmartTieringBySize(streams, tierTop, tierBalanced, tierEfficient);
-  }
-
-  const keptStreams = new Set();
-  const resGroups = new Map();
-
-  for (const s of streams) {
-    const r = extractResolution(s);
-    if (!resGroups.has(r)) resGroups.set(r, []);
-    resGroups.get(r).push(s);
-  }
-
-  for (const [, group] of resGroups.entries()) {
     const selected  = [];
     const leftovers = [];
     let topCount = 0, balancedCount = 0, efficientCount = 0;
 
     for (const s of group) {
-      const mbps = extractBitrateMbps(s, runtimeMinutes);
-      if (mbps <= 0) {
+      const tier = classifyStreamTier(s, resolution, { runtimeMinutes, groupMaxSizeGb });
+      if (tier === 'unknown') {
         leftovers.push(s);
         continue;
       }
 
-      if (mbps >= BITRATE_TOP_MBPS) {
+      if (tier === 'top') {
         if      (topCount       < tierTop)       { selected.push(s); topCount++; }
         else if (balancedCount  < tierBalanced)  { selected.push(s); balancedCount++; }
         else if (efficientCount < tierEfficient) { selected.push(s); efficientCount++; }
         else leftovers.push(s);
-      } else if (mbps >= BITRATE_BALANCED_MBPS) {
+      } else if (tier === 'balanced') {
         if      (balancedCount  < tierBalanced)  { selected.push(s); balancedCount++; }
         else if (topCount       < tierTop)       { selected.push(s); topCount++; }
         else if (efficientCount < tierEfficient) { selected.push(s); efficientCount++; }
