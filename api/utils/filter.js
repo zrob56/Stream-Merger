@@ -135,8 +135,8 @@ export function deduplicateStreams(streams) {
 // ---------------------------------------------------------------------------
 
 const BITRATE_THRESHOLDS_MBPS = {
-  '4k':    { topMin: 25, balancedMin: 8 },
-  '2160p': { topMin: 25, balancedMin: 8 },
+  '4k':    { topMin: 20, balancedMin: 8 },
+  '2160p': { topMin: 20, balancedMin: 8 },
   // 1080p and below share the same bitrate model for now.
   '1080p': { topMin: 12, balancedMin: 3 },
   '720p':  { topMin: 12, balancedMin: 3 },
@@ -146,7 +146,7 @@ const BITRATE_THRESHOLDS_MBPS = {
 };
 
 function getSizeThresholds(resolution, groupMaxSizeGb) {
-  let balancedMaxGb = groupMaxSizeGb * 0.5;
+  let balancedMaxGb = groupMaxSizeGb * 0.35;
   if (resolution === '4k' || resolution === '2160p') balancedMaxGb = Math.max(balancedMaxGb, 25);
   else if (resolution === '1080p')                   balancedMaxGb = Math.max(balancedMaxGb, 12);
   else if (resolution === '720p')                    balancedMaxGb = Math.max(balancedMaxGb, 5);

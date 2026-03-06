@@ -12,7 +12,7 @@ export default function handler(req, res) {
   const manifest = {
     id: 'community.unified-stream-aggregator',
     version: '1.0.3',
-    name: 'Unified Stream',
+    name: 'Stream Merger',
     description:
       'Aggregates streams from multiple Stremio addons in parallel. ' +
       'Deduplicates, sorts, and normalises bingeGroup for seamless autoplay.',
