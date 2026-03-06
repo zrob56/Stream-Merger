@@ -20,6 +20,38 @@ let _redis = null;
 const RUNTIME_TIMEOUT_MS = 1200;
 const RUNTIME_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const runtimeCache = new Map();
+const EARLY_EXIT_TIER_MARGIN = 1;
+const BREAKER_WINDOW_SEC = 300;     // 5 min failure window
+const BREAKER_THRESHOLD = 3;        // failures in window before cooldown
+const BREAKER_COOLDOWN_SEC = 300;   // 5 min deprioritize period
+
+function addonBreakerId(manifestUrl) {
+  return createHash('sha1').update(manifestUrl).digest('hex').slice(0, 12);
+}
+
+function isTierSatisfied(count, target, margin = EARLY_EXIT_TIER_MARGIN) {
+  if (target <= 0) return true;
+  return count >= (target + margin);
+}
+
+export function isEarlyExitSatisfied(topC, balC, effC, tierTop, tierBalanced, tierEfficient, margin = EARLY_EXIT_TIER_MARGIN) {
+  return (
+    isTierSatisfied(topC, tierTop, margin) &&
+    isTierSatisfied(balC, tierBalanced, margin) &&
+    isTierSatisfied(effC, tierEfficient, margin)
+  );
+}
+
+export function orderAddonsByBreakerState(addons, breakerState = {}) {
+  return [...addons]
+    .map((url, idx) => ({ url, idx, cooldownSec: breakerState[url] ?? 0 }))
+    .sort((a, b) => {
+      const ac = a.cooldownSec > 0 ? 1 : 0;
+      const bc = b.cooldownSec > 0 ? 1 : 0;
+      if (ac !== bc) return ac - bc;
+      return a.idx - b.idx;
+    });
+}
 
 async function getRedis() {
   if (_redis) return _redis;
@@ -145,6 +177,45 @@ async function fetchRuntimeMinutes(type, imdbId) {
   return minutes;
 }
 
+async function getAddonBreakerState(redis, addons) {
+  const state = {};
+  if (!redis) return state;
+
+  for (const manifestUrl of addons) {
+    try {
+      const id = addonBreakerId(manifestUrl);
+      const ttl = await redis.ttl(`cb:cool:${id}`);
+      state[manifestUrl] = ttl > 0 ? ttl : 0;
+    } catch {
+      state[manifestUrl] = 0;
+    }
+  }
+  return state;
+}
+
+async function recordAddonFailure(redis, manifestUrl) {
+  if (!redis) return;
+  try {
+    const id = addonBreakerId(manifestUrl);
+    const failKey = `cb:fail:${id}`;
+    const coolKey = `cb:cool:${id}`;
+    const count = await redis.incr(failKey);
+    if (count === 1) await redis.expire(failKey, BREAKER_WINDOW_SEC);
+    if (count >= BREAKER_THRESHOLD) {
+      await redis.set(coolKey, '1', { ex: BREAKER_COOLDOWN_SEC });
+      await redis.del(failKey);
+    }
+  } catch { /* non-fatal */ }
+}
+
+async function recordAddonSuccess(redis, manifestUrl) {
+  if (!redis) return;
+  try {
+    const id = addonBreakerId(manifestUrl);
+    await redis.del(`cb:fail:${id}`);
+  } catch { /* non-fatal */ }
+}
+
 // ---------------------------------------------------------------------------
 // Main handler
 // ---------------------------------------------------------------------------
@@ -177,6 +248,7 @@ export default async function handler(req, res) {
   const { imdbId, season, episode } = parseId(rawId);
 
   if (!addons.length) {
+    res.setHeader('Vary', 'Accept-Encoding');
     res.setHeader('X-Runtime-Minutes', '0');
     res.setHeader('X-Runtime-Source', 'fallback');
     res.status(200).json({ streams: [] });
@@ -198,6 +270,7 @@ export default async function handler(req, res) {
         const hitRuntimeSource = hitRuntimeMinutes > 0 ? 'cinemeta' : 'fallback';
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=60');
+        res.setHeader('Vary', 'Accept-Encoding');
         res.setHeader('X-Cache', 'HIT');
         res.setHeader('X-Runtime-Minutes', String(hitRuntimeMinutes));
         res.setHeader('X-Runtime-Source', hitRuntimeSource);
@@ -217,8 +290,13 @@ export default async function handler(req, res) {
   const fallbackTarget = limit > 0 ? limit : 15;
   const runtimeMinutes = tierSlots > 0 ? await fetchRuntimeMinutes(type, imdbId) : 0;
   const runtimeSource = runtimeMinutes > 0 ? 'cinemeta' : 'fallback';
+  const breakerState = await getAddonBreakerState(redis, addons);
+  const fetchAddons = orderAddonsByBreakerState(addons, breakerState);
+  let earlyExitTriggered = false;
+  let earlyExitReason = '';
 
-  const fetchPromises = addons.map((manifestUrl, i) => {
+  const fetchPromises = fetchAddons.map((addon, i) => {
+    const manifestUrl = addon.url;
     const streamUrl = buildStreamUrl(manifestUrl, type, stremioId);
     const timeout = addonTimeouts[manifestUrl] ?? FETCH_TIMEOUT_MS;
 
@@ -229,7 +307,7 @@ export default async function handler(req, res) {
           
           const preppedStreams = rawStreams.map(s => ({
             ...s,
-            _addonName: identifyAddonName(s, addons[i]),
+            _addonName: identifyAddonName(s, manifestUrl),
             _trustProxies: trustProxies,
           }));
 
@@ -266,24 +344,28 @@ export default async function handler(req, res) {
                 else if (tier === 'top') topC++;
               }
 
-              if (topC >= tierTop && balC >= tierBalanced && effC >= tierEfficient) {
+              if (isEarlyExitSatisfied(topC, balC, effC, tierTop, tierBalanced, tierEfficient, EARLY_EXIT_TIER_MARGIN)) {
                 perfectDistributionMet = true;
                 break;
               }
             }
 
             if (perfectDistributionMet) {
+              earlyExitTriggered = true;
+              earlyExitReason = `smart-tiers+margin(${EARLY_EXIT_TIER_MARGIN})`;
               abortController.abort();
             }
           } else {
             if (currentDeduped.length >= fallbackTarget) {
+              earlyExitTriggered = true;
+              earlyExitReason = `fallbackTarget(${fallbackTarget})`;
               abortController.abort();
             }
           }
         }
-        return result;
+        return { ...result, _addonUrl: manifestUrl };
       })
-      .catch(() => ({ streams: [] })); // Catch aborts silently so Promise.allSettled doesn't fail
+      .catch((err) => ({ streams: [], _addonUrl: manifestUrl, _error: String(err?.message ?? err ?? 'unknown') })); // Catch aborts silently so Promise.allSettled doesn't fail
   });
 
   const results = await Promise.allSettled(fetchPromises);
@@ -299,12 +381,28 @@ export default async function handler(req, res) {
         allStreams.push(...slice.map(s => ({
           ...s,
           _addonIdx:      i,
-          _addonUrl:      addons[i],
-          _addonName:     identifyAddonName(s, addons[i]),
+          _addonUrl:      fetchAddons[i].url,
+          _addonName:     identifyAddonName(s, fetchAddons[i].url),
           _trustProxies:  trustProxies,
         })));
       }
     }
+  }
+
+  if (redis) {
+    const breakerWrites = [];
+    for (let i = 0; i < results.length; i++) {
+      const addonUrl = fetchAddons[i]?.url;
+      if (!addonUrl) continue;
+      const r = results[i];
+      const errMsg = String(r.value?._error ?? r.reason?.message ?? '');
+      const hadError = r.status === 'rejected' || Boolean(r.value?._error);
+      const wasIntentionalAbort = earlyExitTriggered && /\babort/i.test(errMsg);
+      const streamCount = r.status === 'fulfilled' ? (r.value?.streams?.length ?? 0) : 0;
+      if (hadError && !wasIntentionalAbort) breakerWrites.push(recordAddonFailure(redis, addonUrl));
+      else if (streamCount > 0) breakerWrites.push(recordAddonSuccess(redis, addonUrl));
+    }
+    await Promise.allSettled(breakerWrites);
   }
 
   // Folder popup fix & strict episode matching for series
@@ -387,14 +485,24 @@ export default async function handler(req, res) {
     }
 
     lines.push(`Runtime for bitrate tiering: ${runtimeMinutes > 0 ? `${runtimeMinutes} min` : 'unavailable (size fallback)'} [source: ${runtimeSource}]`);
+    lines.push(`Early-exit: ${earlyExitTriggered ? `triggered via ${earlyExitReason}` : 'not triggered'}; tier margin = +${EARLY_EXIT_TIER_MARGIN}`);
+    const deprioritized = fetchAddons.filter(a => a.cooldownSec > 0);
+    if (deprioritized.length > 0) {
+      lines.push('Circuit breaker (deprioritized addons):');
+      for (const a of deprioritized) {
+        let host;
+        try { host = new URL(a.url).hostname; } catch { host = a.url; }
+        lines.push(`  ${host}: cooldown ${a.cooldownSec}s`);
+      }
+    }
     lines.push('');
 
     for (let i = 0; i < results.length; i++) {
       let host;
-      try { host = new URL(addons[i]).hostname; } catch { host = addons[i]; }
+      try { host = new URL(fetchAddons[i].url).hostname; } catch { host = fetchAddons[i].url; }
       const r = results[i];
-      if (r.status === 'rejected') {
-        const reason = String(r.reason?.message ?? r.reason ?? 'unknown').slice(0, 120);
+      if (r.status === 'rejected' || r.value?._error) {
+        const reason = String(r.value?._error ?? r.reason?.message ?? r.reason ?? 'unknown').slice(0, 120);
         lines.push(`❌ ${host}: ${reason}`);
       } else {
         const raw = r.value?.streams?.length ?? 0;
@@ -436,6 +544,7 @@ export default async function handler(req, res) {
 
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=60');
+  res.setHeader('Vary', 'Accept-Encoding');
   res.setHeader('X-Runtime-Minutes', String(runtimeMinutes > 0 ? runtimeMinutes : 0));
   res.setHeader('X-Runtime-Source', runtimeSource);
   res.status(200).json({ streams: final });
