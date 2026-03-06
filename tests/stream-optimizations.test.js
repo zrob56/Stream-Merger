@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 
 import { isEarlyExitSatisfied, orderAddonsByBreakerState } from '../api/stream.js';
 
-test('early-exit uses +1 margin per requested tier', () => {
-  // Targets top=1 balanced=1 efficient=1 with margin +1.
-  assert.equal(isEarlyExitSatisfied(1, 1, 1, 1, 1, 1), false);
-  assert.equal(isEarlyExitSatisfied(2, 2, 2, 1, 1, 1), true);
+test('early-exit exits exactly at target (margin=0)', () => {
+  // Exact match satisfies.
+  assert.equal(isEarlyExitSatisfied(1, 1, 1, 1, 1, 1), true);
+  // One tier short does not satisfy.
+  assert.equal(isEarlyExitSatisfied(0, 1, 1, 1, 1, 1), false);
 });
 
 test('early-exit ignores tiers that are disabled (target 0)', () => {

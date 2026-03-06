@@ -20,7 +20,7 @@ let _redis = null;
 const RUNTIME_TIMEOUT_MS = 1200;
 const RUNTIME_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const runtimeCache = new Map();
-const EARLY_EXIT_TIER_MARGIN = 1;
+const EARLY_EXIT_TIER_MARGIN = 0;
 const BREAKER_WINDOW_SEC = 300;     // 5 min failure window
 const BREAKER_THRESHOLD = 3;        // failures in window before cooldown
 const BREAKER_COOLDOWN_SEC = 300;   // 5 min deprioritize period
@@ -322,11 +322,13 @@ export default async function handler(req, res) {
               if (resGroups[r]) resGroups[r].push(s);
             }
 
-            let perfectDistributionMet = false;
+            let eligibleGroups = 0;
+            let satisfiedGroups = 0;
 
             for (const r of ['4k', '1080p']) {
               const group = resGroups[r];
               if (group.length < tierSlots) continue;
+              eligibleGroups++;
 
               let groupMaxSizeGb = 0;
               if (!(runtimeMinutes > 0)) {
@@ -345,14 +347,15 @@ export default async function handler(req, res) {
               }
 
               if (isEarlyExitSatisfied(topC, balC, effC, tierTop, tierBalanced, tierEfficient, EARLY_EXIT_TIER_MARGIN)) {
-                perfectDistributionMet = true;
-                break;
+                satisfiedGroups++;
               }
             }
 
+            const perfectDistributionMet = eligibleGroups > 0 && satisfiedGroups === eligibleGroups;
+
             if (perfectDistributionMet) {
               earlyExitTriggered = true;
-              earlyExitReason = `smart-tiers+margin(${EARLY_EXIT_TIER_MARGIN})`;
+              earlyExitReason = 'smart-tiers(all-groups)';
               abortController.abort();
             }
           } else {
@@ -485,7 +488,7 @@ export default async function handler(req, res) {
     }
 
     lines.push(`Runtime for bitrate tiering: ${runtimeMinutes > 0 ? `${runtimeMinutes} min` : 'unavailable (size fallback)'} [source: ${runtimeSource}]`);
-    lines.push(`Early-exit: ${earlyExitTriggered ? `triggered via ${earlyExitReason}` : 'not triggered'}; tier margin = +${EARLY_EXIT_TIER_MARGIN}`);
+    lines.push(`Early-exit: ${earlyExitTriggered ? `triggered via ${earlyExitReason}` : 'not triggered'}; tier margin = 0`);
     const deprioritized = fetchAddons.filter(a => a.cooldownSec > 0);
     if (deprioritized.length > 0) {
       lines.push('Circuit breaker (deprioritized addons):');
