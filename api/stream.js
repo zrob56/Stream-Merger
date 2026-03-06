@@ -40,6 +40,7 @@ async function getRedis() {
 function identifyAddonName(stream, manifestUrl) {
   const haystack = `${manifestUrl ?? ''} ${stream.url ?? ''} ${stream.name ?? ''}`.toLowerCase();
 
+  if (haystack.includes('sootio')) return 'Sootio';
   if (haystack.includes('debridmediamanager')) return 'DMM Cast';
   if (haystack.includes('stremthru'))     return 'StremThru';
   if (haystack.includes('torrentsdb'))    return 'TorrentsDB';
