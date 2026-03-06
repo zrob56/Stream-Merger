@@ -329,6 +329,31 @@ export default async function handler(req, res) {
       await redis.set(cacheKey, JSON.stringify({ streams: final }), { ex: cacheTtl });
     } catch { /* non-fatal */ }
   }
+  // Store in Redis cache (non-fatal if it fails)
+  if (redis) {
+    try {
+      await redis.set(cacheKey, JSON.stringify({ streams: final }), { ex: cacheTtl });
+    } catch { /* non-fatal */ }
+  }
+
+  // --- Background fetch for next episode cache warming ---
+  if (type === 'series' && season && episode) {
+    const nextEp = parseInt(episode, 10) + 1;
+    const nextId = `${imdbId}:${season}:${nextEp}`;
+    
+    // Build the URL to our own aggregator endpoint
+    const protocol = req.headers['x-forwarded-proto'] || 'https';
+    const host = req.headers.host;
+    const warmupUrl = `${protocol}://${host}/api/stream?config=${encodeURIComponent(rawConfig)}&type=series&id=${nextId}`;
+    
+    // Fire and forget (don't await it). Catch errors so it doesn't crash the main process.
+    fetch(warmupUrl).catch(() => {});
+  }
+
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=60');
+  res.status(200).json({ streams: final });
+}
 
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=60');
