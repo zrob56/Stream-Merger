@@ -65,7 +65,7 @@ const DISPLAY_OPTIONS = [
 ];
 const DEFAULT_DISPLAY = ['source', 'resolution', 'cached', 'tags', 'filename', 'seeders', 'size'];
 
-const DEFAULT_FILTERS = { cachedOnly: false, minSeeders: 0, maxSizeGb: 0, minResolution: '', excludeTerms: [], requiredHdr: [], requiredSource: [], requiredAudio: [] };
+const DEFAULT_FILTERS = { cachedOnly: false, minSeeders: 0, maxSizeGb: 0, minResolution: '', excludeTerms: [], requiredHdr: [], requiredCodec: [], requiredSource: [], requiredAudio: [] };
 
 const PREVIEW_OPTIONS = [
   { label: 'The Dark Knight',       value: 'tt0468569:movie'  },
@@ -75,6 +75,7 @@ const PREVIEW_OPTIONS = [
 ];
 
 const HDR_PILL_OPTIONS    = ['DV', 'HDR10+', 'HDR10', 'HDR', 'HLG'];
+const CODEC_PILL_OPTIONS  = ['AV1', 'x265', 'x264'];
 const SOURCE_PILL_OPTIONS = ['Remux', 'BluRay', 'WEB-DL', 'WEBRip', 'HDTV', 'DVD'];
 const AUDIO_PILL_OPTIONS  = ['Atmos', 'TrueHD', 'DD+', 'DTS-HD', 'DTS', 'AAC'];
 const EXCLUDE_PRESETS     = ['cam', 'ts', 'hdcam', 'telesync', 'screener', 'r5', 'dvdscr'];
@@ -124,7 +125,7 @@ function buildConfig(addons, sort, display, { limit, tierTop, tierBalanced, tier
   if (trustProxies) payload.trustProxies = true;
   if (filters.cachedOnly || filters.minSeeders > 0 || filters.maxSizeGb > 0 || filters.minResolution
       || filters.excludeTerms.length > 0 || filters.requiredHdr.length > 0
-      || filters.requiredSource.length > 0 || filters.requiredAudio.length > 0) {
+      || filters.requiredCodec.length > 0 || filters.requiredSource.length > 0 || filters.requiredAudio.length > 0) {
     payload.filters = filters;
   }
   if (addonTimeouts) {
@@ -989,6 +990,27 @@ function FiltersSection({ filters, setFilters, limit, setLimit, tierTop, setTier
         </div>
       </div>
 
+      {/* Required Codec */}
+      <div className="p-2.5 rounded border border-border bg-panel space-y-2">
+        <div>
+          <p className="text-sm text-zinc-200">Required codec</p>
+          <p className="text-xs text-zinc-500">Keep only streams with one of these codec tags (streams with no codec tag always pass)</p>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {CODEC_PILL_OPTIONS.map(c => (
+            <button
+              key={c}
+              onClick={() => togglePill('requiredCodec', c)}
+              className={`px-2.5 py-1 rounded text-xs transition border ${
+                filters.requiredCodec.includes(c)
+                  ? 'bg-accent border-accent text-white'
+                  : 'border-border text-zinc-400 hover:border-zinc-400 hover:text-zinc-200'
+              }`}
+            >{c}</button>
+          ))}
+        </div>
+      </div>
+
       {/* Required Source */}
       <div className="p-2.5 rounded border border-border bg-panel space-y-2">
         <div>
@@ -1407,7 +1429,7 @@ function App() {
 
   const hasActiveFilters = filters.cachedOnly || filters.minSeeders > 0 || filters.maxSizeGb > 0 || !!filters.minResolution
     || filters.excludeTerms.length > 0 || filters.requiredHdr.length > 0
-    || filters.requiredSource.length > 0 || filters.requiredAudio.length > 0;
+    || filters.requiredCodec.length > 0 || filters.requiredSource.length > 0 || filters.requiredAudio.length > 0;
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-10 space-y-8">
@@ -1613,6 +1635,9 @@ function App() {
               )}
               {filters.requiredHdr.length > 0 && (
                 <span className="px-2 py-0.5 rounded bg-panel border border-border">{filters.requiredHdr.join('/')}</span>
+              )}
+              {filters.requiredCodec.length > 0 && (
+                <span className="px-2 py-0.5 rounded bg-panel border border-border">codec: {filters.requiredCodec.join('/')}</span>
               )}
               {filters.requiredSource.length > 0 && (
                 <span className="px-2 py-0.5 rounded bg-panel border border-border">src: {filters.requiredSource.join('/')}</span>

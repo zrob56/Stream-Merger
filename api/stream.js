@@ -17,6 +17,9 @@ import { normalizeBingeGroup, formatStreamDisplay, sanitizeStream } from './util
 // ---------------------------------------------------------------------------
 
 let _redis = null;
+const RUNTIME_TIMEOUT_MS = 1200;
+const RUNTIME_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const runtimeCache = new Map();
 
 async function getRedis() {
   if (_redis) return _redis;
@@ -60,6 +63,86 @@ function identifyAddonName(stream, manifestUrl) {
   } catch {
     return 'Unknown';
   }
+}
+
+function parseRuntimeMinutes(value) {
+  if (typeof value === 'number' && value > 0) return Math.round(value);
+  if (typeof value !== 'string') return 0;
+
+  const s = value.trim().toLowerCase();
+  if (!s) return 0;
+
+  const iso = s.match(/^pt(?:(\d+)h)?(?:(\d+)m)?$/i);
+  if (iso) {
+    const h = parseInt(iso[1] ?? '0', 10);
+    const m = parseInt(iso[2] ?? '0', 10);
+    const total = (h * 60) + m;
+    return total > 0 ? total : 0;
+  }
+
+  const min = s.match(/(\d{2,4})\s*min/);
+  if (min) return parseInt(min[1], 10);
+
+  const hm = s.match(/(\d{1,2})\s*h(?:\s*(\d{1,2})\s*m)?/);
+  if (hm) {
+    const h = parseInt(hm[1], 10);
+    const m = parseInt(hm[2] ?? '0', 10);
+    const total = (h * 60) + m;
+    return total > 0 ? total : 0;
+  }
+
+  return 0;
+}
+
+function extractRuntimeFromMeta(meta) {
+  if (!meta || typeof meta !== 'object') return 0;
+
+  const candidates = [
+    meta.runtime,
+    meta.runtimeMinutes,
+    meta.runtime_minutes,
+    meta.duration,
+    meta.movieRuntime,
+  ];
+
+  for (const c of candidates) {
+    const mins = parseRuntimeMinutes(c);
+    if (mins > 0) return mins;
+  }
+
+  if (typeof meta.description === 'string') {
+    const fromDescription = parseRuntimeMinutes(meta.description);
+    if (fromDescription > 0) return fromDescription;
+  }
+
+  return 0;
+}
+
+async function fetchRuntimeMinutes(type, imdbId) {
+  const cacheKey = `${type}:${imdbId}`;
+  const now = Date.now();
+  const hit = runtimeCache.get(cacheKey);
+  if (hit && hit.expiresAt > now) return hit.minutes;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), RUNTIME_TIMEOUT_MS);
+  const url = `https://v3-cinemeta.strem.io/meta/${type}/${imdbId}.json`;
+  let minutes = 0;
+
+  try {
+    const r = await fetch(url, { signal: controller.signal });
+    if (r.ok) {
+      const data = await r.json();
+      minutes = extractRuntimeFromMeta(data?.meta);
+    }
+  } catch {
+    minutes = 0;
+  } finally {
+    clearTimeout(timer);
+  }
+
+  runtimeCache.set(cacheKey, { minutes, expiresAt: now + RUNTIME_CACHE_TTL_MS });
+  return minutes;
 }
 
 // ---------------------------------------------------------------------------
@@ -234,7 +317,7 @@ export default async function handler(req, res) {
     });
   }
 
-// --- Consolidation pipeline ---
+  // --- Consolidation pipeline ---
   // Order matters: sort/dedup/bingeGroup read the original name/title;
   // formatStreamDisplay must run last so it doesn't corrupt those reads.
   const sorted      = sortStreams(allStreams, sort, type);
@@ -246,13 +329,15 @@ export default async function handler(req, res) {
     filtered = deduped;
   }
 
-  let tiered        = applySmartTiering(filtered, tierTop, tierBalanced, tierEfficient);
+  const runtimeMinutes = (tierTop > 0 || tierBalanced > 0 || tierEfficient > 0)
+    ? await fetchRuntimeMinutes(type, imdbId)
+    : 0;
+  let tiered        = applySmartTiering(filtered, tierTop, tierBalanced, tierEfficient, { runtimeMinutes });
 
   // Fallback 2: If smart tiering blocked everything, revert to filtered pool
   if (tiered.length === 0 && filtered.length > 0) {
     tiered = filtered;
   }
-
   const normalized  = normalizeBingeGroup(tiered, imdbId);
   const formatted   = formatStreamDisplay(normalized, display);
 
@@ -299,6 +384,9 @@ export default async function handler(req, res) {
       lines.push('');
     }
 
+    lines.push(`Runtime for bitrate tiering: ${runtimeMinutes > 0 ? `${runtimeMinutes} min` : 'unavailable (size fallback)'}`);
+    lines.push('');
+
     for (let i = 0; i < results.length; i++) {
       let host;
       try { host = new URL(addons[i]).hostname; } catch { host = addons[i]; }
@@ -324,12 +412,6 @@ export default async function handler(req, res) {
   }
 
   // Store in Redis cache (non-fatal if it fails)
-  if (redis) {
-    try {
-      await redis.set(cacheKey, JSON.stringify({ streams: final }), { ex: cacheTtl });
-    } catch { /* non-fatal */ }
-  }
- // Store in Redis cache (non-fatal if it fails)
   if (redis) {
     try {
       await redis.set(cacheKey, JSON.stringify({ streams: final }), { ex: cacheTtl });

@@ -108,6 +108,15 @@ export function extractSizeGb(stream) {
   return 0;
 }
 
+export function extractBitrateMbps(stream, runtimeMinutes) {
+  const sizeGb = extractSizeGb(stream);
+  if (!(sizeGb > 0) || !(runtimeMinutes > 0)) return 0;
+
+  const runtimeSeconds = runtimeMinutes * 60;
+  // GiB -> Mib conversion: 1 GiB = 8192 Mib
+  return (sizeGb * 8192) / runtimeSeconds;
+}
+
 export function extractSeeders(stream) {
   if (stream._seeders !== undefined) return stream._seeders;
   const h = getHaystack(stream);

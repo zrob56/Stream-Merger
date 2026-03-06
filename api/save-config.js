@@ -47,7 +47,7 @@ export default async function handler(req, res) {
   const id = randomBytes(4).toString('hex'); // 8 hex chars
   await redis.set(`shorturl:${id}`, config.trim(), { ex: 31_536_000 }); // 1 year TTL
 
-  const protocol = req.headers['x-forwarded-proto'] ?? 'https';
+  const protocol = (req.headers['x-forwarded-proto'] ?? 'https').split(',')[0].trim();
   const host     = req.headers.host ?? 'unified-stream.vercel.app';
   const shortUrl = `${protocol}://${host}/stremio/${id}/manifest.json`;
 

@@ -3,7 +3,7 @@
 
 import {
   extractResolution, extractSourceQuality, extractQualityTags,
-  extractSeeders, extractSizeGb, isCachedDebrid, extractEpisodes, extractReleaseGroup,
+  extractSeeders, extractSizeGb, extractBitrateMbps, isCachedDebrid, extractEpisodes,
   HDR_LABELS, CODEC_LABELS, SOURCE_LABELS, AUDIO_LABELS, QUALITY_ORDER,
 } from './parse.js';
 
@@ -56,19 +56,14 @@ export function applyFilters(streams, filters) {
 // Deduplication — two-pass: exact then fuzzy
 // ---------------------------------------------------------------------------
 
-/**
- * Removes duplicate streams.
- *
- * Pass 1 (exact): dedup by infoHash+fileIdx or url (unchanged behavior).
- * Pass 2 (fuzzy): merge streams with identical resolution+sourceQuality+codec
- *   where both have a parseable size and sizes differ by ≤ 0.05 GB.
- *
- * @param {object[]} streams - already sorted (best-first)
- * @returns {object[]}
- */
+function extractReleaseGroup(stream) {
+  const h = (stream.behaviorHints?.filename || stream.title || '').split('\n')[0];
+  const match = h.match(/-([a-zA-Z0-9]+)(?:\.[a-z0-9]{3,4})?$/i);
+  return match ? match[1].toLowerCase() : 'unknown';
+}
+
 export function deduplicateStreams(streams) {
-  // --- Pass 1: exact dedup ---
-  const seen   = new Map(); // normalized key → index in result[]
+  const seen   = new Map(); // normalized key -> index in result[]
   const result = [];
 
   for (const stream of streams) {
@@ -92,23 +87,19 @@ export function deduplicateStreams(streams) {
     }
   }
 
-  // --- Pass 2: fuzzy dedup ---
-  // Key: resolution|sourceQuality|codec
-  // Gate: both streams must have parseable size AND |sizeA - sizeB| ≤ 0.05 GB
-// --- Pass 2: fuzzy dedup ---
   const CODEC_LABELS_SUBSET = ['AV1', 'x265', 'x264'];
-  const fuzzyBuckets = new Map(); 
+  const fuzzyBuckets = new Map(); // key -> [{ idx, size, rls }]
   const keep = new Array(result.length).fill(true);
 
   for (let i = 0; i < result.length; i++) {
     const s = result[i];
     const sizeA = extractSizeGb(s);
-    if (sizeA === 0) continue; 
+    if (sizeA === 0) continue;
 
     const res   = extractResolution(s);
     const src   = extractSourceQuality(s);
     const codec = extractQualityTags(s).find(t => CODEC_LABELS_SUBSET.includes(t)) ?? 'none';
-    const rls   = extractReleaseGroup(s); // Extract the group
+    const rls   = extractReleaseGroup(s);
     const key   = `${res}|${src}|${codec}`;
 
     if (!fuzzyBuckets.has(key)) {
@@ -119,8 +110,7 @@ export function deduplicateStreams(streams) {
     const candidates = fuzzyBuckets.get(key);
     let merged = false;
     for (const cand of candidates) {
-      
-      // If release groups match perfectly, tolerate 0.5GB difference. Otherwise, 0.05GB.
+      // Same release group gets a wider tolerance because file metadata often differs slightly.
       const isSameGroup = rls !== 'unknown' && cand.rls !== 'unknown' && rls === cand.rls;
       const tolerance = isSameGroup ? 0.5 : 0.05;
 
@@ -134,37 +124,37 @@ export function deduplicateStreams(streams) {
         break;
       }
     }
-    if (!merged) {
-      candidates.push({ idx: i, size: sizeA, rls });
-    }
+    if (!merged) candidates.push({ idx: i, size: sizeA, rls });
   }
 
   return result.filter((_, i) => keep[i]);
 }
+
 // ---------------------------------------------------------------------------
-// Smart Tiering (Customizable Top vs Balanced Limits)
+// Smart tiering
 // ---------------------------------------------------------------------------
 
-export function applySmartTiering(streams, tierTop, tierBalanced, tierEfficient) {
+const BITRATE_TOP_MBPS = 25;
+const BITRATE_BALANCED_MBPS = 10;
+
+function applySmartTieringBySize(streams, tierTop, tierBalanced, tierEfficient) {
   if (tierTop <= 0 && tierBalanced <= 0 && tierEfficient <= 0) return streams;
 
   const keptStreams = new Set();
-  const groups  = new Map();
+  const groups = new Map();
 
   for (const s of streams) {
     const r = extractResolution(s);
     const eps = extractEpisodes(s);
     const isPack = eps.length !== 1 ? 'pack' : 'single';
-    
-    // Group by BOTH resolution and pack status (e.g., "1080p-single" vs "1080p-pack")
     const key = `${r}-${isPack}`;
-    
+
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(s);
   }
 
   for (const [key, group] of groups.entries()) {
-    const r = key.split('-')[0]; // Extract just the resolution string for threshold math
+    const r = key.split('-')[0];
 
     let maxSize = 0;
     for (const s of group) {
@@ -172,14 +162,12 @@ export function applySmartTiering(streams, tierTop, tierBalanced, tierEfficient)
       if (sz > maxSize) maxSize = sz;
     }
 
-    // Balanced threshold: 50% of max, with resolution floor
     let balancedThreshold = maxSize * 0.5;
     if (r === '4k' || r === '2160p') balancedThreshold = Math.max(balancedThreshold, 25);
     else if (r === '1080p')          balancedThreshold = Math.max(balancedThreshold, 12);
     else if (r === '720p')           balancedThreshold = Math.max(balancedThreshold, 5);
     else                             balancedThreshold = Math.max(balancedThreshold, 2);
 
-    // Efficient threshold: 25% of max, clamped per resolution
     let effThresh = maxSize * 0.25;
     if (r === '4k' || r === '2160p') effThresh = Math.min(Math.max(effThresh, 3), 8);
     else if (r === '1080p')          effThresh = Math.min(Math.max(effThresh, 1), 3);
@@ -217,9 +205,58 @@ export function applySmartTiering(streams, tierTop, tierBalanced, tierEfficient)
   return streams.filter(s => keptStreams.has(s));
 }
 
-export function extractReleaseGroup(stream) {
-  const h = (stream.behaviorHints?.filename || stream.title || '').split('\n')[0];
-  // Looks for a hyphen followed by letters/numbers at the very end of the line
-  const match = h.match(/-([a-zA-Z0-9]+)(?:\.[a-z0-9]{3,4})?$/i);
-  return match ? match[1].toLowerCase() : 'unknown';
+export function applySmartTiering(streams, tierTop, tierBalanced, tierEfficient, options = {}) {
+  if (tierTop <= 0 && tierBalanced <= 0 && tierEfficient <= 0) return streams;
+
+  const runtimeMinutes = Number(options.runtimeMinutes ?? 0);
+  if (!(runtimeMinutes > 0)) {
+    return applySmartTieringBySize(streams, tierTop, tierBalanced, tierEfficient);
+  }
+
+  const keptStreams = new Set();
+  const resGroups = new Map();
+
+  for (const s of streams) {
+    const r = extractResolution(s);
+    if (!resGroups.has(r)) resGroups.set(r, []);
+    resGroups.get(r).push(s);
+  }
+
+  for (const [, group] of resGroups.entries()) {
+    const selected  = [];
+    const leftovers = [];
+    let topCount = 0, balancedCount = 0, efficientCount = 0;
+
+    for (const s of group) {
+      const mbps = extractBitrateMbps(s, runtimeMinutes);
+      if (mbps <= 0) {
+        leftovers.push(s);
+        continue;
+      }
+
+      if (mbps >= BITRATE_TOP_MBPS) {
+        if      (topCount       < tierTop)       { selected.push(s); topCount++; }
+        else if (balancedCount  < tierBalanced)  { selected.push(s); balancedCount++; }
+        else if (efficientCount < tierEfficient) { selected.push(s); efficientCount++; }
+        else leftovers.push(s);
+      } else if (mbps >= BITRATE_BALANCED_MBPS) {
+        if      (balancedCount  < tierBalanced)  { selected.push(s); balancedCount++; }
+        else if (topCount       < tierTop)       { selected.push(s); topCount++; }
+        else if (efficientCount < tierEfficient) { selected.push(s); efficientCount++; }
+        else leftovers.push(s);
+      } else {
+        if      (efficientCount < tierEfficient) { selected.push(s); efficientCount++; }
+        else if (balancedCount  < tierBalanced)  { selected.push(s); balancedCount++; }
+        else if (topCount       < tierTop)       { selected.push(s); topCount++; }
+        else leftovers.push(s);
+      }
+    }
+
+    const needed = (tierTop + tierBalanced + tierEfficient) - selected.length;
+    for (let i = 0; i < needed && leftovers.length > 0; i++) selected.push(leftovers.shift());
+
+    for (const s of selected) keptStreams.add(s);
+  }
+
+  return streams.filter(s => keptStreams.has(s));
 }
