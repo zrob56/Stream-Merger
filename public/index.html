@@ -163,11 +163,11 @@ function toTransportUrl(url) {
 // ---------------------------------------------------------------------------
 
 function SelectedAddonRow({ index, url, name, onRemove, onMoveUp, onMoveDown, isFirst, isLast, health, onPing, timeout, onTimeoutChange }) {
-  const dotColor = health === 'ok' ? 'text-emerald-400' : health === 'error' ? 'text-red-400' : health === 'checking' ? 'text-yellow-400 animate-pulse' : 'text-zinc-600';
-  const dotTitle = health === 'ok' ? 'Online' : health === 'error' ? 'Offline' : health === 'checking' ? 'Checking…' : 'Click to check';
+  const status = typeof health === 'string' ? health : (health?.status ?? 'idle');
+  const dotColor = status === 'ok' ? 'text-emerald-400' : status === 'error' ? 'text-red-400' : status === 'checking' ? 'text-yellow-400 animate-pulse' : 'text-zinc-600';
+  const dotTitle = status === 'ok' ? 'Online' : status === 'error' ? 'Offline' : status === 'checking' ? 'Checking...' : 'Click to check';
   return (
     <div className="flex items-center gap-2 group">
-      {/* Reorder */}
       <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
           onClick={onMoveUp}
@@ -1234,8 +1234,9 @@ function App() {
   const [filters,        setFilters]        = useState(() => _live?.filters        ?? DEFAULT_FILTERS);
   const [addonTimeouts,  setAddonTimeouts]  = useState(() => _live?.addonTimeouts  ?? {});
   const [addonHealth,    setAddonHealth]    = useState({});
-  const [preview,        setPreview]        = useState({ status: 'idle', count: 0, error: '' });
+  const [preview,        setPreview]        = useState({ status: 'idle', count: 0, error: '', runtimeMinutes: 0, runtimeSource: '' });
   const [previewId,      setPreviewId]      = useState('tt0468569:movie');
+  const [smokeTest,      setSmokeTest]      = useState({ status: 'idle', results: [], passed: 0 });
   const [shortManifestUrl, setShortManifestUrl] = useState('');
   const [isGenerating,     setIsGenerating]     = useState(false);
 
@@ -1325,7 +1326,8 @@ function App() {
     setSelected([]); setSort(DEFAULT_SORT); setDisplay(DEFAULT_DISPLAY);
     setLimit(0); setTierTop(0); setTierBalanced(0); setTierEfficient(0); setAddonCap(0);
     setDebug(false); setTrustProxies(false); setFilters(DEFAULT_FILTERS);
-    setAddonTimeouts({}); setAddonHealth({}); setPreview({ status: 'idle', count: 0, error: '' });
+    setAddonTimeouts({}); setAddonHealth({}); setPreview({ status: 'idle', count: 0, error: '', runtimeMinutes: 0, runtimeSource: '' });
+    setSmokeTest({ status: 'idle', results: [], passed: 0 });
   };
 
   const importInputRef = useRef(null);
@@ -1367,30 +1369,55 @@ function App() {
     reader.readAsText(file);
   };
 
-  // --- Addon health check ---
-  const pingAddon = async (manifestUrl) => {
-    setAddonHealth(h => ({ ...h, [manifestUrl]: 'checking' }));
-    try {
-      const r = await fetch(manifestUrl, { signal: AbortSignal.timeout(5000) });
-      setAddonHealth(h => ({ ...h, [manifestUrl]: r.ok ? 'ok' : 'error' }));
-    } catch {
-      setAddonHealth(h => ({ ...h, [manifestUrl]: 'error' }));
-    }
-  };
-
   // --- Derived values ---
   const validAddons = selected.filter((a) => a.url && isValidUrl(a.url));
   const addonUrls   = validAddons.map((a) => a.url);
   const configB64   = buildConfig(addonUrls, sort, display, { limit, tierTop, tierBalanced, tierEfficient, addonCap, debug, trustProxies, filters, addonTimeouts });
 
+  // --- Addon health check ---
+  const probeAddon = async (manifestUrl) => {
+    const startedAt = performance.now();
+    setAddonHealth(h => ({ ...h, [manifestUrl]: { ...(h[manifestUrl] ?? {}), status: 'checking' } }));
+    try {
+      const r = await fetch(manifestUrl, { signal: AbortSignal.timeout(5000) });
+      const latencyMs = Math.round(performance.now() - startedAt);
+      setAddonHealth(h => ({
+        ...h,
+        [manifestUrl]: { status: r.ok ? 'ok' : 'error', latencyMs, checkedAt: Date.now() },
+      }));
+    } catch {
+      const latencyMs = Math.round(performance.now() - startedAt);
+      setAddonHealth(h => ({
+        ...h,
+        [manifestUrl]: { status: 'error', latencyMs, checkedAt: Date.now() },
+      }));
+    }
+  };
+
+  const checkAllAddons = async () => {
+    const manifests = validAddons.map(a => toTransportUrl(a.url) + '/manifest.json');
+    await Promise.all(manifests.map(probeAddon));
+  };
+
+  useEffect(() => {
+    if (!validAddons.length) return;
+    const tick = () => {
+      if (document.hidden) return;
+      checkAllAddons().catch(() => {});
+    };
+    tick();
+    const id = setInterval(tick, 60_000);
+    return () => clearInterval(id);
+  }, [validAddons.map(a => a.url).join('|')]);
+
   // --- Stream preview ---
   useEffect(() => {
-    setPreview({ status: 'idle', count: 0, error: '' });
+    setPreview({ status: 'idle', count: 0, error: '', runtimeMinutes: 0, runtimeSource: '' });
   }, [configB64, previewId]);
 
   const runPreview = async () => {
     if (window.location.protocol === 'file:') return;
-    setPreview({ status: 'loading', count: 0, error: '' });
+    setPreview({ status: 'loading', count: 0, error: '', runtimeMinutes: 0, runtimeSource: '' });
     try {
       const opt  = PREVIEW_OPTIONS.find(o => o.value === previewId) ?? PREVIEW_OPTIONS[0];
       const type = opt.value.split(':')[1];
@@ -1399,10 +1426,55 @@ function App() {
       const r = await fetch(url);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
-      setPreview({ status: 'ok', count: Array.isArray(data.streams) ? data.streams.length : 0, error: '' });
+      const runtimeMinutes = parseInt(r.headers.get('X-Runtime-Minutes') ?? '0', 10) || 0;
+      const runtimeSource = r.headers.get('X-Runtime-Source') ?? '';
+      setPreview({ status: 'ok', count: Array.isArray(data.streams) ? data.streams.length : 0, error: '', runtimeMinutes, runtimeSource });
     } catch (e) {
-      setPreview({ status: 'error', count: 0, error: e.message });
+      setPreview({ status: 'error', count: 0, error: e.message, runtimeMinutes: 0, runtimeSource: '' });
     }
+  };
+
+  const runSmokeTest = async () => {
+    if (window.location.protocol === 'file:') return;
+    const cases = [
+      { label: 'The Dark Knight', type: 'movie', id: 'tt0468569' },
+      { label: 'Breaking Bad S1E1', type: 'series', id: 'tt0903747:1:1' },
+      { label: 'Attack on Titan S1E1', type: 'series', id: 'tt2560140:1:1' },
+    ];
+    setSmokeTest({ status: 'loading', results: [], passed: 0 });
+
+    const results = [];
+    for (const c of cases) {
+      const started = performance.now();
+      try {
+        const r = await fetch(`/api/stream?config=${configB64}&type=${c.type}&id=${c.id}`);
+        const data = r.ok ? await r.json() : { streams: [] };
+        const streamCount = Array.isArray(data.streams) ? data.streams.length : 0;
+        results.push({
+          label: c.label,
+          statusCode: r.status,
+          streamCount,
+          ms: Math.round(performance.now() - started),
+          runtimeMinutes: parseInt(r.headers.get('X-Runtime-Minutes') ?? '0', 10) || 0,
+          runtimeSource: r.headers.get('X-Runtime-Source') ?? '',
+          ok: r.ok && streamCount > 0,
+        });
+      } catch (e) {
+        results.push({
+          label: c.label,
+          statusCode: 0,
+          streamCount: 0,
+          ms: Math.round(performance.now() - started),
+          runtimeMinutes: 0,
+          runtimeSource: '',
+          ok: false,
+          error: e.message,
+        });
+      }
+    }
+
+    const passed = results.filter(r => r.ok).length;
+    setSmokeTest({ status: 'done', results, passed });
   };
 
   const generateShortLink = async () => {
@@ -1498,12 +1570,44 @@ function App() {
                 onMoveDown={() => moveAddon(i, 1)}
                 isFirst={i === 0}
                 isLast={i === selected.length - 1}
-                health={addonHealth[addon.url + '/manifest.json']}
-                onPing={() => pingAddon(toTransportUrl(addon.url) + '/manifest.json')}
+                health={addonHealth[toTransportUrl(addon.url) + '/manifest.json']}
+                onPing={() => probeAddon(toTransportUrl(addon.url) + '/manifest.json')}
                 timeout={addonTimeouts[addon.url] ?? 0}
                 onTimeoutChange={v => setAddonTimeouts(prev => ({ ...prev, [addon.url]: v }))}
               />
             ))}
+          </div>
+        )}
+
+        {selected.length > 0 && (
+          <div className="p-3 rounded border border-border bg-panel space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-zinc-500 uppercase tracking-widest">Health</p>
+              <button
+                onClick={checkAllAddons}
+                className="text-xs px-2 py-1 rounded border border-border text-zinc-400 hover:border-zinc-400 hover:text-zinc-200 transition"
+              >
+                Check all
+              </button>
+            </div>
+            <div className="space-y-1.5">
+              {selected.map((addon, i) => {
+                const manifestUrl = toTransportUrl(addon.url) + '/manifest.json';
+                const h = addonHealth[manifestUrl] ?? { status: 'idle' };
+                const dot = h.status === 'ok' ? 'text-emerald-400' : h.status === 'error' ? 'text-red-400' : h.status === 'checking' ? 'text-yellow-400 animate-pulse' : 'text-zinc-600';
+                return (
+                  <div key={`health-${addon.url}-${i}`} className="flex items-center justify-between text-xs">
+                    <span className="truncate text-zinc-300 max-w-[45%]">{addon.name || addon.url}</span>
+                    <span className="flex items-center gap-2 text-zinc-500">
+                      <span className={dot}>●</span>
+                      <span>{h.status}</span>
+                      <span>{typeof h.latencyMs === 'number' ? `${h.latencyMs}ms` : '—'}</span>
+                      <span>{h.checkedAt ? new Date(h.checkedAt).toLocaleTimeString() : '—'}</span>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </section>
@@ -1601,6 +1705,13 @@ function App() {
                   ))}
                 </select>
               </div>
+              <button
+                onClick={runSmokeTest}
+                disabled={!isReady || window.location.protocol === 'file:' || smokeTest.status === 'loading'}
+                className="px-3 py-1.5 rounded border border-border text-xs text-zinc-400 hover:border-zinc-400 hover:text-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              >
+                {smokeTest.status === 'loading' ? 'Testing…' : 'Test my config (3-title smoke)'}
+              </button>
               {preview.status === 'ok' && (
                 <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
                   {preview.count} stream{preview.count !== 1 ? 's' : ''}
@@ -1615,6 +1726,35 @@ function App() {
                 <span className="text-xs text-zinc-600">Uses The Dark Knight as a test title</span>
               )}
             </div>
+
+            {(preview.status === 'ok' || preview.status === 'error') && (
+              <div className="text-xs text-zinc-600">
+                Runtime diagnostics: {preview.runtimeMinutes > 0 ? `${preview.runtimeMinutes} min` : '0 min'} · source: {preview.runtimeSource || 'fallback'}
+              </div>
+            )}
+
+            {smokeTest.status !== 'idle' && (
+              <div className="rounded border border-border bg-panel p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-zinc-500 uppercase tracking-widest">Smoke test</p>
+                  {smokeTest.status === 'done' && (
+                    <span className={`text-xs px-2 py-0.5 rounded border ${smokeTest.passed === 3 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-red-500/10 border-red-500/30 text-red-400'}`}>
+                      {smokeTest.passed}/3 passed
+                    </span>
+                  )}
+                </div>
+                {smokeTest.results.map((r, i) => (
+                  <div key={`smoke-${i}`} className="text-xs text-zinc-400 flex flex-wrap gap-x-3 gap-y-1">
+                    <span className={r.ok ? 'text-emerald-400' : 'text-red-400'}>{r.ok ? 'PASS' : 'FAIL'}</span>
+                    <span>{r.label}</span>
+                    <span>HTTP {r.statusCode || 'ERR'}</span>
+                    <span>{r.streamCount} streams</span>
+                    <span>{r.ms}ms</span>
+                    <span>runtime: {r.runtimeMinutes > 0 ? `${r.runtimeMinutes}m` : '0m'} ({r.runtimeSource || 'fallback'})</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Summary */}
             <div className="flex flex-wrap gap-2 text-xs text-zinc-500">

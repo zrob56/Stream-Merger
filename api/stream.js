@@ -177,6 +177,8 @@ export default async function handler(req, res) {
   const { imdbId, season, episode } = parseId(rawId);
 
   if (!addons.length) {
+    res.setHeader('X-Runtime-Minutes', '0');
+    res.setHeader('X-Runtime-Source', 'fallback');
     res.status(200).json({ streams: [] });
     return;
   }
@@ -191,10 +193,15 @@ export default async function handler(req, res) {
     try {
       const hit = await redis.get(cacheKey);
       if (hit) {
+        const hitObj = typeof hit === 'string' ? JSON.parse(hit) : hit;
+        const hitRuntimeMinutes = parseInt(hitObj?.runtimeMinutes ?? 0, 10) || 0;
+        const hitRuntimeSource = hitRuntimeMinutes > 0 ? 'cinemeta' : 'fallback';
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=60');
         res.setHeader('X-Cache', 'HIT');
-        res.status(200).json(typeof hit === 'string' ? JSON.parse(hit) : hit);
+        res.setHeader('X-Runtime-Minutes', String(hitRuntimeMinutes));
+        res.setHeader('X-Runtime-Source', hitRuntimeSource);
+        res.status(200).json(hitObj?.streams ? hitObj : { streams: [] });
         return;
       }
     } catch { /* cache miss — proceed normally */ }
@@ -209,6 +216,7 @@ export default async function handler(req, res) {
   const tierSlots = tierTop + tierBalanced + tierEfficient;
   const fallbackTarget = limit > 0 ? limit : 15;
   const runtimeMinutes = tierSlots > 0 ? await fetchRuntimeMinutes(type, imdbId) : 0;
+  const runtimeSource = runtimeMinutes > 0 ? 'cinemeta' : 'fallback';
 
   const fetchPromises = addons.map((manifestUrl, i) => {
     const streamUrl = buildStreamUrl(manifestUrl, type, stremioId);
@@ -378,7 +386,7 @@ export default async function handler(req, res) {
       lines.push('');
     }
 
-    lines.push(`Runtime for bitrate tiering: ${runtimeMinutes > 0 ? `${runtimeMinutes} min` : 'unavailable (size fallback)'}`);
+    lines.push(`Runtime for bitrate tiering: ${runtimeMinutes > 0 ? `${runtimeMinutes} min` : 'unavailable (size fallback)'} [source: ${runtimeSource}]`);
     lines.push('');
 
     for (let i = 0; i < results.length; i++) {
@@ -408,7 +416,7 @@ export default async function handler(req, res) {
   // Store in Redis cache (non-fatal if it fails)
   if (redis) {
     try {
-      await redis.set(cacheKey, JSON.stringify({ streams: final }), { ex: cacheTtl });
+      await redis.set(cacheKey, JSON.stringify({ streams: final, runtimeMinutes }), { ex: cacheTtl });
     } catch { /* non-fatal */ }
   }
 
@@ -428,5 +436,7 @@ export default async function handler(req, res) {
 
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=60');
+  res.setHeader('X-Runtime-Minutes', String(runtimeMinutes > 0 ? runtimeMinutes : 0));
+  res.setHeader('X-Runtime-Source', runtimeSource);
   res.status(200).json({ streams: final });
 }
