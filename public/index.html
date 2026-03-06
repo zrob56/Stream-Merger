@@ -108,6 +108,39 @@ const PRESETS = [
   },
 ];
 
+const MODE_PROFILES = [
+  {
+    label: 'Fast',
+    sort: ['cached', 'resolution', 'seeders', 'size'],
+    tierTop: 2,
+    tierBalanced: 1,
+    tierEfficient: 1,
+    addonCap: 12,
+    timeoutMs: 3500,
+    note: 'Speed-focused: tighter caps/timeouts.',
+  },
+  {
+    label: 'Balanced',
+    sort: DEFAULT_SORT,
+    tierTop: 3,
+    tierBalanced: 2,
+    tierEfficient: 2,
+    addonCap: 20,
+    timeoutMs: 5000,
+    note: 'Balanced speed and quality.',
+  },
+  {
+    label: 'Quality',
+    sort: ['resolution', 'cached', 'size', 'seeders', 'source', 'english', 'subs'],
+    tierTop: 5,
+    tierBalanced: 3,
+    tierEfficient: 2,
+    addonCap: 35,
+    timeoutMs: 7000,
+    note: 'Quality-focused: larger caps/timeouts.',
+  },
+];
+
 // ---------------------------------------------------------------------------
 // Utilities
 // ---------------------------------------------------------------------------
@@ -283,6 +316,30 @@ function PresetsRow({ onApply, onReset }) {
       </div>
       <p className="text-xs text-zinc-600">
         Presets update the sort order and add starter addons — existing addons are kept.
+      </p>
+    </div>
+  );
+}
+
+function ModeProfilesRow({ onApply }) {
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-zinc-500 uppercase tracking-widest">One-click modes</p>
+      <div className="flex flex-wrap gap-2">
+        {MODE_PROFILES.map((mode) => (
+          <button
+            key={mode.label}
+            onClick={() => onApply(mode)}
+            title={mode.note}
+            className="px-3 py-1.5 rounded border border-border bg-panel text-sm text-zinc-300
+                       hover:border-zinc-400 hover:text-white transition"
+          >
+            {mode.label}
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-zinc-600">
+        Modes keep your selected addons and fully replace sort/tier/cap/filter/timeout tuning.
       </p>
     </div>
   );
@@ -1321,6 +1378,20 @@ function App() {
     }
   };
 
+  const applyModeProfile = (mode) => {
+    const validSelected = selected.filter(a => a.url && isValidUrl(a.url));
+    const timeoutMap = Object.fromEntries(validSelected.map(a => [a.url, mode.timeoutMs]));
+
+    setSort(mode.sort);
+    setTierTop(mode.tierTop);
+    setTierBalanced(mode.tierBalanced);
+    setTierEfficient(mode.tierEfficient);
+    setAddonCap(mode.addonCap);
+    setFilters(DEFAULT_FILTERS);
+    setAddonTimeouts(timeoutMap);
+    setDebug(false);
+  };
+
   const resetToDefaults = () => {
     try { localStorage.removeItem('us_live'); } catch {}
     setSelected([]); setSort(DEFAULT_SORT); setDisplay(DEFAULT_DISPLAY);
@@ -1503,6 +1574,32 @@ function App() {
     || filters.excludeTerms.length > 0 || filters.requiredHdr.length > 0
     || filters.requiredCodec.length > 0 || filters.requiredSource.length > 0 || filters.requiredAudio.length > 0;
 
+  const addonCountPenalty = validAddons.length * 4;
+  const perAddonTimeouts = validAddons.map(a => addonTimeouts[a.url] ?? 5000);
+  const avgTimeoutMs = perAddonTimeouts.length > 0
+    ? Math.round(perAddonTimeouts.reduce((sum, v) => sum + v, 0) / perAddonTimeouts.length)
+    : 5000;
+  const timeoutPenalty = Math.floor(avgTimeoutMs / 1000) * 2;
+  const capPenalty = addonCap > 0 ? Math.floor(addonCap / 5) : 6;
+  const tierPenalty = (2 * tierTop) + tierBalanced + tierEfficient;
+
+  const healthStates = validAddons.map(a => addonHealth[toTransportUrl(a.url) + '/manifest.json'] ?? { status: 'idle' });
+  const errorPenalty = healthStates.filter(h => h.status === 'error').length * 12;
+  const checkingPenalty = healthStates.filter(h => h.status === 'checking').length * 3;
+  const highLatencyPenalty = healthStates.filter(h => typeof h.latencyMs === 'number' && h.latencyMs > 1500).length * 4;
+
+  const speedScore = Math.max(0, Math.min(100,
+    100 - addonCountPenalty - timeoutPenalty - capPenalty - tierPenalty - errorPenalty - checkingPenalty - highLatencyPenalty
+  ));
+  const speedLabel = speedScore >= 75 ? 'Fast' : speedScore >= 45 ? 'Medium' : 'Slow';
+  const speedReasons = [
+    { label: `${validAddons.length} sources`, value: addonCountPenalty },
+    { label: `avg timeout ${Math.round(avgTimeoutMs / 1000)}s`, value: timeoutPenalty },
+    { label: addonCap > 0 ? `addon-cap ${addonCap}` : 'uncapped addon-cap', value: capPenalty },
+    { label: `tier load ${tierTop}/${tierBalanced}/${tierEfficient}`, value: tierPenalty },
+    { label: `${healthStates.filter(h => h.status === 'error').length} health errors`, value: errorPenalty },
+  ].filter(r => r.value > 0).sort((a, b) => b.value - a.value).slice(0, 2);
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-10 space-y-8">
 
@@ -1527,6 +1624,7 @@ function App() {
 
         {/* Quick-start presets */}
         <PresetsRow onApply={applyPreset} onReset={resetToDefaults} />
+        <ModeProfilesRow onApply={applyModeProfile} />
 
         {/* Named saved presets */}
         <SavedPresetsRow
@@ -1674,6 +1772,24 @@ function App() {
 
         {isReady && (
           <div className="space-y-3">
+            <div className="rounded border border-border bg-panel p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-zinc-500 uppercase tracking-widest">Estimated response speed</p>
+                <span className={`text-xs px-2 py-0.5 rounded border ${
+                  speedLabel === 'Fast'
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                    : speedLabel === 'Medium'
+                    ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                    : 'bg-red-500/10 border-red-500/30 text-red-400'
+                }`}>
+                  {speedLabel} · {speedScore}/100
+                </span>
+              </div>
+              <p className="text-xs text-zinc-600 mt-2">
+                {speedReasons.length > 0 ? `Top factors: ${speedReasons.map(r => r.label).join(', ')}` : 'No major speed penalties detected.'}
+              </p>
+            </div>
+
             {/* Manifest URL display */}
             <div className="rounded border border-border bg-panel p-3">
               <p className="text-xs text-zinc-500 mb-1.5">Manifest URL</p>
