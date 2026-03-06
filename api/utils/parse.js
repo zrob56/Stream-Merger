@@ -1,7 +1,7 @@
 // api/utils/parse.js
 // Shared constants, tag extractors, signal detectors, and request helpers.
 
-export const FETCH_TIMEOUT_MS = 3500;
+export const FETCH_TIMEOUT_MS = 4500;
 
 export const DISPLAY_DEFAULTS = ['source', 'resolution', 'cached', 'tags', 'filename', 'seeders', 'size'];
 
@@ -93,6 +93,15 @@ export function extractEpisodes(stream) {
 
 export function extractSizeGb(stream) {
   if (stream._size !== undefined) return stream._size;
+  
+  // 1. Check for native byte sizes first (most accurate)
+  const rawBytes = stream.behaviorHints?.videoSize ?? stream.size;
+  if (typeof rawBytes === 'number' && rawBytes > 0) {
+    // Convert bytes to GB
+    return rawBytes / (1024 * 1024 * 1024);
+  }
+
+  // 2. Fallback to text parsing if native sizes aren't provided
   const h = getHaystack(stream);
   const matchGb = h.match(/([\d.]+)\s*gb/); if (matchGb) return parseFloat(matchGb[1]);
   const matchMb = h.match(/([\d.]+)\s*mb/); if (matchMb) return parseFloat(matchMb[1]) / 1024;
