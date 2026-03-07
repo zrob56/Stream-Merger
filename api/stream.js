@@ -541,8 +541,11 @@ export default async function handler(req, res) {
     const host = req.headers.host;
     const warmupUrl = `${protocol}://${host}/api/stream?config=${encodeURIComponent(rawConfig)}&type=series&id=${nextId}`;
     
-    // Fire and forget (don't await it). Catch errors so it doesn't crash the main process.
-    fetch(warmupUrl).catch(() => {});
+    // Fire and forget (don't await it). Forward the user's IP so Sootio/Real-Debrid
+    // don't see a different IP and flag the session.
+    const warmupHeaders = {};
+    if (clientIp) { warmupHeaders['X-Forwarded-For'] = clientIp; warmupHeaders['X-Real-IP'] = clientIp; }
+    fetch(warmupUrl, { headers: warmupHeaders }).catch(() => {});
   }
 
   res.setHeader('Access-Control-Allow-Origin', '*');
