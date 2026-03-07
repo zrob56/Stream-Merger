@@ -13,30 +13,33 @@ import { SOURCE_QUALITY_ORDER } from './sort.js';
 // ---------------------------------------------------------------------------
 
 export function applyFilters(streams, filters) {
+  const needTagCheck = filters.requiredHdr.length > 0 || filters.requiredCodec.length > 0
+    || (filters.requiredSource && filters.requiredSource.length > 0)
+    || (filters.requiredAudio && filters.requiredAudio.length > 0);
+
   return streams.filter(s => {
     if (filters.excludeTerms.length > 0) {
       const hay = `${s.name ?? ''} ${s.title ?? ''}`.toLowerCase();
       if (filters.excludeTerms.some(t => hay.includes(t))) return false;
     }
-    if (filters.requiredHdr.length > 0) {
-      const tags     = extractQualityTags(s);
-      const detected = HDR_LABELS.filter(h => tags.includes(h));
-      if (detected.length > 0 && !filters.requiredHdr.some(h => detected.includes(h))) return false;
-    }
-    if (filters.requiredCodec.length > 0) {
-      const tags     = extractQualityTags(s);
-      const detected = CODEC_LABELS.filter(c => tags.includes(c));
-      if (detected.length > 0 && !filters.requiredCodec.some(c => detected.includes(c))) return false;
-    }
-    if (filters.requiredSource && filters.requiredSource.length > 0) {
-      const tags     = extractQualityTags(s);
-      const detected = SOURCE_LABELS.filter(src => tags.includes(src));
-      if (detected.length > 0 && !filters.requiredSource.some(src => detected.includes(src))) return false;
-    }
-    if (filters.requiredAudio && filters.requiredAudio.length > 0) {
-      const tags     = extractQualityTags(s);
-      const detected = AUDIO_LABELS.filter(a => tags.includes(a));
-      if (detected.length > 0 && !filters.requiredAudio.some(a => detected.includes(a))) return false;
+    if (needTagCheck) {
+      const tags = extractQualityTags(s);
+      if (filters.requiredHdr.length > 0) {
+        const detected = HDR_LABELS.filter(h => tags.includes(h));
+        if (detected.length > 0 && !filters.requiredHdr.some(h => detected.includes(h))) return false;
+      }
+      if (filters.requiredCodec.length > 0) {
+        const detected = CODEC_LABELS.filter(c => tags.includes(c));
+        if (detected.length > 0 && !filters.requiredCodec.some(c => detected.includes(c))) return false;
+      }
+      if (filters.requiredSource && filters.requiredSource.length > 0) {
+        const detected = SOURCE_LABELS.filter(src => tags.includes(src));
+        if (detected.length > 0 && !filters.requiredSource.some(src => detected.includes(src))) return false;
+      }
+      if (filters.requiredAudio && filters.requiredAudio.length > 0) {
+        const detected = AUDIO_LABELS.filter(a => tags.includes(a));
+        if (detected.length > 0 && !filters.requiredAudio.some(a => detected.includes(a))) return false;
+      }
     }
     if (filters.cachedOnly && !isCachedDebrid(s)) return false;
     if (filters.minSeeders > 0 && extractSeeders(s) < filters.minSeeders) return false;

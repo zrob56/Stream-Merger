@@ -181,7 +181,7 @@ async function getAddonBreakerState(redis, addons) {
   const state = {};
   if (!redis) return state;
 
-  for (const manifestUrl of addons) {
+  await Promise.all(addons.map(async (manifestUrl) => {
     try {
       const id = addonBreakerId(manifestUrl);
       const ttl = await redis.ttl(`cb:cool:${id}`);
@@ -189,7 +189,7 @@ async function getAddonBreakerState(redis, addons) {
     } catch {
       state[manifestUrl] = 0;
     }
-  }
+  }));
   return state;
 }
 
@@ -288,12 +288,15 @@ export default async function handler(req, res) {
   let accumulatedStreams = [];
   const tierSlots = tierTop + tierBalanced + tierEfficient;
   const fallbackTarget = limit > 0 ? limit : 15;
-  const runtimeMinutes = tierSlots > 0 ? await fetchRuntimeMinutes(type, imdbId) : 0;
+  const [runtimeMinutes, breakerState] = await Promise.all([
+    tierSlots > 0 ? fetchRuntimeMinutes(type, imdbId) : Promise.resolve(0),
+    getAddonBreakerState(redis, addons),
+  ]);
   const runtimeSource = runtimeMinutes > 0 ? 'cinemeta' : 'fallback';
-  const breakerState = await getAddonBreakerState(redis, addons);
   const fetchAddons = orderAddonsByBreakerState(addons, breakerState);
   let earlyExitTriggered = false;
   let earlyExitReason = '';
+  const earlyExitSeen = new Set();
 
   const fetchPromises = fetchAddons.map((addon, i) => {
     const manifestUrl = addon.url;
@@ -313,11 +316,17 @@ export default async function handler(req, res) {
 
           const survivors = applyFilters(preppedStreams, filters);
           accumulatedStreams.push(...survivors);
-          const currentDeduped = deduplicateStreams(accumulatedStreams);
+          // Fast approximate dedup for early-exit: track seen keys in a Set
+          for (const s of survivors) {
+            const key = s.infoHash
+              ? (s.infoHash + (s.fileIdx != null ? ':' + s.fileIdx : ''))
+              : (s.url ?? s.behaviorHints?.filename ?? null);
+            if (key) earlyExitSeen.add(key.toLowerCase());
+          }
 
           if (tierSlots > 0) {
             const resGroups = { '4k': [], '1080p': [] };
-            for (const s of currentDeduped) {
+            for (const s of accumulatedStreams) {
               const r = extractResolution(s);
               if (resGroups[r]) resGroups[r].push(s);
             }
@@ -359,7 +368,7 @@ export default async function handler(req, res) {
               abortController.abort();
             }
           } else {
-            if (currentDeduped.length >= fallbackTarget) {
+            if (earlyExitSeen.size >= fallbackTarget) {
               earlyExitTriggered = true;
               earlyExitReason = `fallbackTarget(${fallbackTarget})`;
               abortController.abort();

@@ -6,7 +6,6 @@
   <title>Stream Merger — Configure</title>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -36,8 +35,9 @@
 
 <div id="root"></div>
 
-<script type="text/babel">
+<script>
 const { useState, useCallback, useEffect, useRef } = React;
+const h = React.createElement;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -206,59 +206,31 @@ function SelectedAddonRow({ index, url, name, onRemove, onMoveUp, onMoveDown, is
   const status = typeof health === 'string' ? health : (health?.status ?? 'idle');
   const dotColor = status === 'ok' ? 'text-emerald-400' : status === 'error' ? 'text-red-400' : status === 'checking' ? 'text-yellow-400 animate-pulse' : 'text-zinc-600';
   const dotTitle = status === 'ok' ? 'Online' : status === 'error' ? 'Offline' : status === 'checking' ? 'Checking...' : 'Click to check';
-  return (
-    <div className="flex items-center gap-2 group">
-      <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button
-          onClick={onMoveUp}
-          disabled={isFirst}
-          className="text-zinc-500 hover:text-zinc-200 disabled:opacity-20 leading-none text-xs px-1"
-          title="Move up"
-        >▲</button>
-        <button
-          onClick={onMoveDown}
-          disabled={isLast}
-          className="text-zinc-500 hover:text-zinc-200 disabled:opacity-20 leading-none text-xs px-1"
-          title="Move down"
-        >▼</button>
-      </div>
-
-      {/* Priority badge */}
-      <span className="w-6 text-center text-xs text-zinc-500 shrink-0" title="Priority order — drag ▲▼ to reorder">#{index + 1}</span>
-
-      {/* Name + URL + timeout */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <button onClick={onPing} title={dotTitle} className={`text-sm leading-none shrink-0 ${dotColor} hover:opacity-70 transition`}>●</button>
-          {name && <p className="text-sm text-zinc-200 truncate">{name}</p>}
-        </div>
-        <p className="text-xs text-zinc-500 truncate">{url}</p>
-        <div className="flex items-center gap-1 mt-0.5">
-          <span className="text-xs text-zinc-600">Timeout:</span>
-          <input
-            type="number"
-            min={1}
-            max={60}
-            step={1}
-            value={timeout > 0 ? timeout / 1000 : ''}
-            onChange={e => {
-              const v = parseFloat(e.target.value);
-              onTimeoutChange(isNaN(v) || v <= 0 ? 0 : Math.round(v * 1000));
-            }}
-            placeholder="7"
-            className="w-14 bg-surface border border-border rounded px-1.5 py-0.5 text-xs text-zinc-300 outline-none focus:border-accent text-right"
-          />
-          <span className="text-xs text-zinc-600">s</span>
-        </div>
-      </div>
-
-      {/* Remove */}
-      <button
-        onClick={onRemove}
-        className="text-zinc-600 hover:text-red-400 transition text-lg leading-none shrink-0 px-1"
-        title="Remove"
-      >×</button>
-    </div>
+  return h('div', { className: 'flex items-center gap-2 group' },
+    h('div', { className: 'flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity' },
+      h('button', { onClick: onMoveUp, disabled: isFirst, className: 'text-zinc-500 hover:text-zinc-200 disabled:opacity-20 leading-none text-xs px-1', title: 'Move up' }, '▲'),
+      h('button', { onClick: onMoveDown, disabled: isLast, className: 'text-zinc-500 hover:text-zinc-200 disabled:opacity-20 leading-none text-xs px-1', title: 'Move down' }, '▼')
+    ),
+    h('span', { className: 'w-6 text-center text-xs text-zinc-500 shrink-0', title: 'Priority order — drag ▲▼ to reorder' }, '#', index + 1),
+    h('div', { className: 'flex-1 min-w-0' },
+      h('div', { className: 'flex items-center gap-1.5' },
+        h('button', { onClick: onPing, title: dotTitle, className: `text-sm leading-none shrink-0 ${dotColor} hover:opacity-70 transition` }, '●'),
+        name && h('p', { className: 'text-sm text-zinc-200 truncate' }, name)
+      ),
+      h('p', { className: 'text-xs text-zinc-500 truncate' }, url),
+      h('div', { className: 'flex items-center gap-1 mt-0.5' },
+        h('span', { className: 'text-xs text-zinc-600' }, 'Timeout:'),
+        h('input', {
+          type: 'number', min: 1, max: 60, step: 1,
+          value: timeout > 0 ? timeout / 1000 : '',
+          onChange: e => { const v = parseFloat(e.target.value); onTimeoutChange(isNaN(v) || v <= 0 ? 0 : Math.round(v * 1000)); },
+          placeholder: '7',
+          className: 'w-14 bg-surface border border-border rounded px-1.5 py-0.5 text-xs text-zinc-300 outline-none focus:border-accent text-right'
+        }),
+        h('span', { className: 'text-xs text-zinc-600' }, 's')
+      )
+    ),
+    h('button', { onClick: onRemove, className: 'text-zinc-600 hover:text-red-400 transition text-lg leading-none shrink-0 px-1', title: 'Remove' }, '×')
   );
 }
 
@@ -270,26 +242,12 @@ function CopyButton({ text }) {
       setTimeout(() => setCopied(false), 2000);
     });
   };
-  return (
-    <button
-      onClick={handle}
-      className="shrink-0 px-3 py-2 rounded bg-accent hover:bg-accent-hover text-white text-sm transition"
-    >
-      {copied ? '✓ Copied' : 'Copy'}
-    </button>
-  );
+  return h('button', { onClick: handle, className: 'shrink-0 px-3 py-2 rounded bg-accent hover:bg-accent-hover text-white text-sm transition' }, copied ? '✓ Copied' : 'Copy');
 }
 
 function InstallButton({ manifestUrl }) {
   const stremioUrl = manifestUrl.replace(/^https?:\/\//, 'stremio://');
-  return (
-    <a
-      href={stremioUrl}
-      className="shrink-0 px-4 py-2 rounded bg-accent hover:bg-accent-hover text-white text-sm transition text-center"
-    >
-      Install in Stremio
-    </a>
-  );
+  return h('a', { href: stremioUrl, className: 'shrink-0 px-4 py-2 rounded bg-accent hover:bg-accent-hover text-white text-sm transition text-center' }, 'Install in Stremio');
 }
 
 // ---------------------------------------------------------------------------
@@ -297,58 +255,23 @@ function InstallButton({ manifestUrl }) {
 // ---------------------------------------------------------------------------
 
 function PresetsRow({ onApply, onReset }) {
-  return (
-    <div className="space-y-2">
-      <p className="text-xs text-zinc-500 uppercase tracking-widest">Quick start</p>
-      <div className="flex flex-wrap gap-2">
-        {PRESETS.map((preset, i) => (
-          <button
-            key={i}
-            onClick={() => onApply(preset)}
-            title={preset.note}
-            className="px-3 py-1.5 rounded border border-border bg-panel text-sm text-zinc-300
-                       hover:border-zinc-400 hover:text-white transition"
-          >
-            {preset.label}
-          </button>
-        ))}
-        <button
-          onClick={onReset}
-          title="Clear all settings and restore defaults"
-          className="px-3 py-1.5 rounded border border-red-900 bg-panel text-sm text-red-400
-                     hover:border-red-500 hover:text-red-300 transition"
-        >
-          Reset to defaults
-        </button>
-      </div>
-      <p className="text-xs text-zinc-600">
-        Presets update the sort order and add starter addons — existing addons are kept.
-      </p>
-    </div>
+  return h('div', { className: 'space-y-2' },
+    h('p', { className: 'text-xs text-zinc-500 uppercase tracking-widest' }, 'Quick start'),
+    h('div', { className: 'flex flex-wrap gap-2' },
+      ...PRESETS.map((preset, i) => h('button', { key: i, onClick: () => onApply(preset), title: preset.note, className: 'px-3 py-1.5 rounded border border-border bg-panel text-sm text-zinc-300 hover:border-zinc-400 hover:text-white transition' }, preset.label)),
+      h('button', { onClick: onReset, title: 'Clear all settings and restore defaults', className: 'px-3 py-1.5 rounded border border-red-900 bg-panel text-sm text-red-400 hover:border-red-500 hover:text-red-300 transition' }, 'Reset to defaults')
+    ),
+    h('p', { className: 'text-xs text-zinc-600' }, 'Presets update the sort order and add starter addons — existing addons are kept.')
   );
 }
 
 function ModeProfilesRow({ onApply }) {
-  return (
-    <div className="space-y-2">
-      <p className="text-xs text-zinc-500 uppercase tracking-widest">One-click modes</p>
-      <div className="flex flex-wrap gap-2">
-        {MODE_PROFILES.map((mode) => (
-          <button
-            key={mode.label}
-            onClick={() => onApply(mode)}
-            title={mode.note}
-            className="px-3 py-1.5 rounded border border-border bg-panel text-sm text-zinc-300
-                       hover:border-zinc-400 hover:text-white transition"
-          >
-            {mode.label}
-          </button>
-        ))}
-      </div>
-      <p className="text-xs text-zinc-600">
-        Modes keep your selected addons and fully replace sort/tier/cap/filter/timeout tuning.
-      </p>
-    </div>
+  return h('div', { className: 'space-y-2' },
+    h('p', { className: 'text-xs text-zinc-500 uppercase tracking-widest' }, 'One-click modes'),
+    h('div', { className: 'flex flex-wrap gap-2' },
+      ...MODE_PROFILES.map((mode) => h('button', { key: mode.label, onClick: () => onApply(mode), title: mode.note, className: 'px-3 py-1.5 rounded border border-border bg-panel text-sm text-zinc-300 hover:border-zinc-400 hover:text-white transition' }, mode.label))
+    ),
+    h('p', { className: 'text-xs text-zinc-600' }, 'Modes keep your selected addons and fully replace sort/tier/cap/filter/timeout tuning.')
   );
 }
 
@@ -376,69 +299,23 @@ function SavedPresetsRow({ savedPresets, setSavedPresets, getCurrentState, onLoa
   };
 
   if (savedPresets.length === 0 && !saving) {
-    return (
-      <button
-        onClick={() => setSaving(true)}
-        className="text-xs text-zinc-600 hover:text-accent transition"
-      >
-        + Save current as preset
-      </button>
-    );
+    return h('button', { onClick: () => setSaving(true), className: 'text-xs text-zinc-600 hover:text-accent transition' }, '+ Save current as preset');
   }
 
-  return (
-    <div className="space-y-2">
-      <p className="text-xs text-zinc-500 uppercase tracking-widest">Saved presets</p>
-      <div className="flex flex-wrap gap-2">
-        {savedPresets.map((preset) => (
-          <div key={preset.name}
-            className="flex items-center gap-1 px-2 py-1 rounded border border-border bg-panel text-sm">
-            <button
-              onClick={() => onLoad(preset)}
-              className="text-zinc-300 hover:text-white transition"
-              title="Load preset"
-            >{preset.name}</button>
-            <button
-              onClick={() => handleDelete(preset.name)}
-              className="text-zinc-600 hover:text-red-400 transition text-base leading-none ml-0.5"
-              title="Delete preset"
-            >×</button>
-          </div>
-        ))}
-        {!saving && (
-          <button
-            onClick={() => setSaving(true)}
-            className="px-2 py-1 rounded border border-border text-xs text-zinc-500 hover:border-zinc-400 hover:text-zinc-200 transition"
-          >Save current…</button>
-        )}
-      </div>
-      {saving && (
-        <div className="flex gap-2 items-center">
-          <input
-            type="text"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') handleSave();
-              if (e.key === 'Escape') { setSaving(false); setName(''); }
-            }}
-            placeholder="Preset name…"
-            autoFocus
-            className="flex-1 bg-surface border border-border rounded px-3 py-1.5 text-sm text-zinc-100
-                       outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-          />
-          <button
-            onClick={handleSave}
-            disabled={!name.trim()}
-            className="px-3 py-1.5 rounded bg-accent hover:bg-accent-hover disabled:opacity-40 text-white text-sm transition"
-          >Save</button>
-          <button
-            onClick={() => { setSaving(false); setName(''); }}
-            className="px-3 py-1.5 rounded border border-border text-zinc-400 text-sm hover:text-zinc-200 transition"
-          >Cancel</button>
-        </div>
-      )}
-    </div>
+  return h('div', { className: 'space-y-2' },
+    h('p', { className: 'text-xs text-zinc-500 uppercase tracking-widest' }, 'Saved presets'),
+    h('div', { className: 'flex flex-wrap gap-2' },
+      ...savedPresets.map((preset) => h('div', { key: preset.name, className: 'flex items-center gap-1 px-2 py-1 rounded border border-border bg-panel text-sm' },
+        h('button', { onClick: () => onLoad(preset), className: 'text-zinc-300 hover:text-white transition', title: 'Load preset' }, preset.name),
+        h('button', { onClick: () => handleDelete(preset.name), className: 'text-zinc-600 hover:text-red-400 transition text-base leading-none ml-0.5', title: 'Delete preset' }, '×')
+      )),
+      !saving && h('button', { onClick: () => setSaving(true), className: 'px-2 py-1 rounded border border-border text-xs text-zinc-500 hover:border-zinc-400 hover:text-zinc-200 transition' }, 'Save current…')
+    ),
+    saving && h('div', { className: 'flex gap-2 items-center' },
+      h('input', { type: 'text', value: name, onChange: e => setName(e.target.value), onKeyDown: e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') { setSaving(false); setName(''); } }, placeholder: 'Preset name…', autoFocus: true, className: 'flex-1 bg-surface border border-border rounded px-3 py-1.5 text-sm text-zinc-100 outline-none focus:border-accent focus:ring-1 focus:ring-accent' }),
+      h('button', { onClick: handleSave, disabled: !name.trim(), className: 'px-3 py-1.5 rounded bg-accent hover:bg-accent-hover disabled:opacity-40 text-white text-sm transition' }, 'Save'),
+      h('button', { onClick: () => { setSaving(false); setName(''); }, className: 'px-3 py-1.5 rounded border border-border text-zinc-400 text-sm hover:text-zinc-200 transition' }, 'Cancel')
+    )
   );
 }
 
@@ -453,7 +330,6 @@ function AddonBrowser({ selectedUrls, onAdd }) {
   const [search, setSearch]     = useState('');
 
   useEffect(() => {
-    // Skip fetch during local file:// preview — /api/addons won't be available
     if (window.location.protocol === 'file:') {
       setLoading(false);
       setError('Registry browser requires a deployed Vercel URL. Use "Add custom URL" below.');
@@ -480,101 +356,38 @@ function AddonBrowser({ selectedUrls, onAdd }) {
   );
 
   if (loading) {
-    return (
-      <div className="py-6 text-center text-sm text-zinc-500">
-        Loading addon registry…
-      </div>
-    );
+    return h('div', { className: 'py-6 text-center text-sm text-zinc-500' }, 'Loading addon registry…');
   }
 
   if (error) {
-    return (
-      <div className="py-4 text-sm text-amber-500 bg-amber-500/10 rounded border border-amber-500/20 px-3">
-        {error}
-      </div>
-    );
+    return h('div', { className: 'py-4 text-sm text-amber-500 bg-amber-500/10 rounded border border-amber-500/20 px-3' }, error);
   }
 
-  return (
-    <div className="space-y-3">
-      <input
-        type="text"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search addons…"
-        className="w-full bg-surface border border-border rounded px-3 py-2 text-sm text-zinc-100 outline-none
-                   focus:border-accent focus:ring-1 focus:ring-accent transition"
-        spellCheck={false}
-      />
-
-      <div className="max-h-72 overflow-y-auto space-y-1 pr-1">
-        {filtered.length === 0 && (
-          <p className="text-sm text-zinc-500 py-4 text-center">No addons match your search.</p>
-        )}
-        {filtered.map((addon) => {
-          const transportUrl = addon.transportUrl;
-          const isAdded = selectedUrls.has(transportUrl);
-          return (
-            <div
-              key={transportUrl}
-              className="flex items-center gap-3 p-2.5 rounded border border-border hover:border-zinc-500 transition bg-panel"
-            >
-              {/* Logo */}
-              {addon.logo ? (
-                <img
-                  src={addon.logo}
-                  alt=""
-                  className="w-8 h-8 rounded object-contain shrink-0 bg-surface"
-                  onError={(e) => { e.target.style.display = 'none'; }}
-                />
-              ) : (
-                <div className="w-8 h-8 rounded bg-surface border border-border shrink-0" />
-              )}
-
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-zinc-200 font-medium truncate">{addon.name}</p>
-                {addon.description && (
-                  <p className="text-xs text-zinc-500 truncate mt-0.5">{addon.description}</p>
-                )}
-                {/* Type badges */}
-                <div className="flex gap-1 mt-1 flex-wrap">
-                  {(addon.types ?? []).map((t) => (
-                    <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-surface border border-border text-zinc-500">
-                      {t}
-                    </span>
-                  ))}
-                </div>
-                {addon.configUrl && (
-                  <a
-                    href={addon.configUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[10px] text-accent hover:text-accent-hover transition mt-1 inline-block"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    Configure ↗
-                  </a>
-                )}
-              </div>
-
-              {/* Add / Added */}
-              {isAdded ? (
-                <span className="shrink-0 text-xs text-emerald-500 px-2">✓ Added</span>
-              ) : (
-                <button
-                  onClick={() => onAdd(addon)}
-                  className="shrink-0 text-xs px-3 py-1.5 rounded border border-accent text-accent
-                             hover:bg-accent hover:text-white transition"
-                >
-                  Add
-                </button>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
+  return h('div', { className: 'space-y-3' },
+    h('input', { type: 'text', value: search, onChange: (e) => setSearch(e.target.value), placeholder: 'Search addons…', className: 'w-full bg-surface border border-border rounded px-3 py-2 text-sm text-zinc-100 outline-none focus:border-accent focus:ring-1 focus:ring-accent transition', spellCheck: false }),
+    h('div', { className: 'max-h-72 overflow-y-auto space-y-1 pr-1' },
+      filtered.length === 0 && h('p', { className: 'text-sm text-zinc-500 py-4 text-center' }, 'No addons match your search.'),
+      ...filtered.map((addon) => {
+        const transportUrl = addon.transportUrl;
+        const isAdded = selectedUrls.has(transportUrl);
+        return h('div', { key: transportUrl, className: 'flex items-center gap-3 p-2.5 rounded border border-border hover:border-zinc-500 transition bg-panel' },
+          addon.logo
+            ? h('img', { src: addon.logo, alt: '', className: 'w-8 h-8 rounded object-contain shrink-0 bg-surface', onError: (e) => { e.target.style.display = 'none'; } })
+            : h('div', { className: 'w-8 h-8 rounded bg-surface border border-border shrink-0' }),
+          h('div', { className: 'flex-1 min-w-0' },
+            h('p', { className: 'text-sm text-zinc-200 font-medium truncate' }, addon.name),
+            addon.description && h('p', { className: 'text-xs text-zinc-500 truncate mt-0.5' }, addon.description),
+            h('div', { className: 'flex gap-1 mt-1 flex-wrap' },
+              ...(addon.types ?? []).map((t) => h('span', { key: t, className: 'text-[10px] px-1.5 py-0.5 rounded bg-surface border border-border text-zinc-500' }, t))
+            ),
+            addon.configUrl && h('a', { href: addon.configUrl, target: '_blank', rel: 'noopener noreferrer', className: 'text-[10px] text-accent hover:text-accent-hover transition mt-1 inline-block', onClick: (e) => e.stopPropagation() }, 'Configure ↗')
+          ),
+          isAdded
+            ? h('span', { className: 'shrink-0 text-xs text-emerald-500 px-2' }, '✓ Added')
+            : h('button', { onClick: () => onAdd(addon), className: 'shrink-0 text-xs px-3 py-1.5 rounded border border-accent text-accent hover:bg-accent hover:text-white transition' }, 'Add')
+        );
+      })
+    )
   );
 }
 
@@ -595,38 +408,12 @@ function CustomUrlInput({ onAdd }) {
     setOpen(false);
   };
 
-  return (
-    <div className="space-y-2">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="text-sm text-accent hover:text-accent-hover transition"
-      >
-        {open ? '− Hide custom URL' : '+ Add custom URL'}
-      </button>
-      {open && (
-        <div className="flex gap-2 items-center">
-          <input
-            type="url"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-            placeholder="https://…/manifest.json"
-            className={`flex-1 bg-surface border rounded px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 transition
-              ${isValid ? 'border-border focus:border-accent focus:ring-accent' : 'border-red-500 focus:ring-red-500'}`}
-            spellCheck={false}
-            autoFocus
-          />
-          <button
-            onClick={handleAdd}
-            disabled={!value || !isValid}
-            className="shrink-0 px-3 py-2 rounded border border-accent text-accent text-sm
-                       hover:bg-accent hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition"
-          >
-            Add
-          </button>
-        </div>
-      )}
-    </div>
+  return h('div', { className: 'space-y-2' },
+    h('button', { onClick: () => setOpen((o) => !o), className: 'text-sm text-accent hover:text-accent-hover transition' }, open ? '− Hide custom URL' : '+ Add custom URL'),
+    open && h('div', { className: 'flex gap-2 items-center' },
+      h('input', { type: 'url', value, onChange: (e) => setValue(e.target.value), onKeyDown: (e) => e.key === 'Enter' && handleAdd(), placeholder: 'https://…/manifest.json', className: `flex-1 bg-surface border rounded px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 transition ${isValid ? 'border-border focus:border-accent focus:ring-accent' : 'border-red-500 focus:ring-red-500'}`, spellCheck: false, autoFocus: true }),
+      h('button', { onClick: handleAdd, disabled: !value || !isValid, className: 'shrink-0 px-3 py-2 rounded border border-accent text-accent text-sm hover:bg-accent hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition' }, 'Add')
+    )
   );
 }
 
@@ -726,105 +513,38 @@ function DebridQuickAdd({ onAdd }) {
   const pillOn   = 'border-accent text-accent bg-accent/10';
   const pillOff  = 'border-border text-zinc-500 hover:border-zinc-400';
 
-  return (
-    <div className="space-y-2">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="text-sm text-accent hover:text-accent-hover transition"
-      >
-        {open ? '− Hide debrid quick-add' : '+ Add debrid addons'}
-      </button>
-
-      {open && (
-        <div className="space-y-3 p-3 rounded border border-border bg-panel">
-          {/* Service selector */}
-          <div className="flex flex-wrap gap-2">
-            {SERVICES.map(([val, label]) => (
-              <button
-                key={val}
-                onClick={() => setService(val)}
-                className={`${pillBase} ${service === val ? pillOn : pillOff}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {/* API key input */}
-          <div className="flex gap-2 items-center">
-            <input
-              type={showKey ? 'text' : 'password'}
-              value={key}
-              onChange={(e) => setKey(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !loading && handleAdd()}
-              placeholder="Paste API key…"
-              className="flex-1 bg-surface border border-border rounded px-3 py-2 text-sm text-zinc-100
-                         outline-none focus:border-accent focus:ring-1 focus:ring-accent transition"
-              spellCheck={false}
-              autoFocus
-            />
-            <button
-              onClick={() => setShowKey((v) => !v)}
-              className="shrink-0 px-3 py-2 rounded border border-border text-zinc-400
-                         text-xs hover:border-zinc-500 hover:text-zinc-200 transition"
-            >
-              {showKey ? 'Hide' : 'Show'}
-            </button>
-          </div>
-
-          {/* Addon checkboxes */}
-          <div className="flex flex-wrap gap-4">
-            {[
-              ['torrentio',   'Torrentio'],
-              ['comet',       'Comet'],
-              ['stremthru',   'StremThru'],
-              ['peerflix',    'Peerflix'],
-              ['meteor',      'Meteor'],
-            ].map(([id, label]) => (
-              <label key={id} className="flex items-center gap-1.5 cursor-pointer select-none text-sm text-zinc-300">
-                <input
-                  type="checkbox"
-                  checked={addons[id]}
-                  onChange={() => setAddons((prev) => ({ ...prev, [id]: !prev[id] }))}
-                  className="w-4 h-4 accent-violet-600"
-                />
-                {label}
-              </label>
-            ))}
-          </div>
-          {addons.stremthru && (
-            <input
-              type="text"
-              value={stremthruHost}
-              onChange={(e) => setStremthruHost(e.target.value)}
-              placeholder="StremThru host"
-              className="w-full bg-surface border border-border rounded px-3 py-2 text-sm text-zinc-100
-                         outline-none focus:border-accent focus:ring-1 focus:ring-accent transition"
-              spellCheck={false}
-            />
-          )}
-
-          {/* Cached-only toggle */}
-          <label className="flex items-center gap-2 mb-3 cursor-pointer select-none text-xs text-emerald-400 border border-emerald-900/30 bg-emerald-500/5 p-2 rounded">
-            <input type="checkbox" checked={cachedOnlyLinks} onChange={e => setCachedOnlyLinks(e.target.checked)} className="w-3.5 h-3.5 accent-emerald-500" />
-            Force "Cached Only" (removes buffering P2P links)
-          </label>
-
-          {/* Submit */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleAdd}
-              disabled={!key.trim() || !Object.values(addons).some(Boolean) || loading}
-              className="px-4 py-1.5 rounded border border-accent text-accent text-sm
-                         hover:bg-accent hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition"
-            >
-              {loading ? 'Adding…' : 'Add Addons'}
-            </button>
-            {flash && <span className="text-xs text-green-400">Added!</span>}
-          </div>
-        </div>
-      )}
-    </div>
+  return h('div', { className: 'space-y-2' },
+    h('button', { onClick: () => setOpen((o) => !o), className: 'text-sm text-accent hover:text-accent-hover transition' }, open ? '− Hide debrid quick-add' : '+ Add debrid addons'),
+    open && h('div', { className: 'space-y-3 p-3 rounded border border-border bg-panel' },
+      h('div', { className: 'flex flex-wrap gap-2' },
+        ...SERVICES.map(([val, label]) => h('button', { key: val, onClick: () => setService(val), className: `${pillBase} ${service === val ? pillOn : pillOff}` }, label))
+      ),
+      h('div', { className: 'flex gap-2 items-center' },
+        h('input', { type: showKey ? 'text' : 'password', value: key, onChange: (e) => setKey(e.target.value), onKeyDown: (e) => e.key === 'Enter' && !loading && handleAdd(), placeholder: 'Paste API key…', className: 'flex-1 bg-surface border border-border rounded px-3 py-2 text-sm text-zinc-100 outline-none focus:border-accent focus:ring-1 focus:ring-accent transition', spellCheck: false, autoFocus: true }),
+        h('button', { onClick: () => setShowKey((v) => !v), className: 'shrink-0 px-3 py-2 rounded border border-border text-zinc-400 text-xs hover:border-zinc-500 hover:text-zinc-200 transition' }, showKey ? 'Hide' : 'Show')
+      ),
+      h('div', { className: 'flex flex-wrap gap-4' },
+        ...[
+          ['torrentio', 'Torrentio'],
+          ['comet',     'Comet'],
+          ['stremthru', 'StremThru'],
+          ['peerflix',  'Peerflix'],
+          ['meteor',    'Meteor'],
+        ].map(([id, label]) => h('label', { key: id, className: 'flex items-center gap-1.5 cursor-pointer select-none text-sm text-zinc-300' },
+          h('input', { type: 'checkbox', checked: addons[id], onChange: () => setAddons((prev) => ({ ...prev, [id]: !prev[id] })), className: 'w-4 h-4 accent-violet-600' }),
+          label
+        ))
+      ),
+      addons.stremthru && h('input', { type: 'text', value: stremthruHost, onChange: (e) => setStremthruHost(e.target.value), placeholder: 'StremThru host', className: 'w-full bg-surface border border-border rounded px-3 py-2 text-sm text-zinc-100 outline-none focus:border-accent focus:ring-1 focus:ring-accent transition', spellCheck: false }),
+      h('label', { className: 'flex items-center gap-2 mb-3 cursor-pointer select-none text-xs text-emerald-400 border border-emerald-900/30 bg-emerald-500/5 p-2 rounded' },
+        h('input', { type: 'checkbox', checked: cachedOnlyLinks, onChange: e => setCachedOnlyLinks(e.target.checked), className: 'w-3.5 h-3.5 accent-emerald-500' }),
+        'Force "Cached Only" (removes buffering P2P links)'
+      ),
+      h('div', { className: 'flex items-center gap-3' },
+        h('button', { onClick: handleAdd, disabled: !key.trim() || !Object.values(addons).some(Boolean) || loading, className: 'px-4 py-1.5 rounded border border-accent text-accent text-sm hover:bg-accent hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition' }, loading ? 'Adding…' : 'Add Addons'),
+        flash && h('span', { className: 'text-xs text-green-400' }, 'Added!')
+      )
+    )
   );
 }
 
@@ -837,31 +557,19 @@ function DisplayToggles({ options, enabled, onChange }) {
     const next = enabled.includes(value)
       ? enabled.filter(v => v !== value)
       : [...enabled, value];
-    // Re-sort into canonical order so the config blob is deterministic
     onChange(options.map(o => o.value).filter(v => next.includes(v)));
   };
-  return (
-    <div className="space-y-1">
-      {options.map((opt) => {
-        const on = enabled.includes(opt.value);
-        return (
-          <label key={opt.value}
-            className="flex items-center gap-3 p-2.5 rounded border border-border bg-panel
-                       cursor-pointer hover:border-zinc-500 transition select-none">
-            <input
-              type="checkbox"
-              checked={on}
-              onChange={() => toggle(opt.value)}
-              className="w-4 h-4 shrink-0 accent-violet-600"
-            />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-zinc-200">{opt.label}</p>
-              <p className="text-xs text-zinc-500">{opt.desc}</p>
-            </div>
-          </label>
-        );
-      })}
-    </div>
+  return h('div', { className: 'space-y-1' },
+    ...options.map((opt) => {
+      const on = enabled.includes(opt.value);
+      return h('label', { key: opt.value, className: 'flex items-center gap-3 p-2.5 rounded border border-border bg-panel cursor-pointer hover:border-zinc-500 transition select-none' },
+        h('input', { type: 'checkbox', checked: on, onChange: () => toggle(opt.value), className: 'w-4 h-4 shrink-0 accent-violet-600' }),
+        h('div', { className: 'flex-1 min-w-0' },
+          h('p', { className: 'text-sm text-zinc-200' }, opt.label),
+          h('p', { className: 'text-xs text-zinc-500' }, opt.desc)
+        )
+      );
+    })
   );
 }
 
@@ -875,27 +583,21 @@ function SortRanker({ criteria, order, onChange }) {
     [next[i], next[i + dir]] = [next[i + dir], next[i]];
     onChange(next);
   };
-  return (
-    <div className="space-y-1">
-      {order.map((key, i) => {
-        const meta = criteria.find(c => c.value === key);
-        return (
-          <div key={key} className="flex items-center gap-2 p-2.5 rounded border border-border bg-panel">
-            <div className="flex flex-col gap-0.5">
-              <button onClick={() => move(i, -1)} disabled={i === 0}
-                className="text-zinc-500 hover:text-zinc-200 disabled:opacity-20 text-xs px-1 leading-none">▲</button>
-              <button onClick={() => move(i, 1)} disabled={i === order.length - 1}
-                className="text-zinc-500 hover:text-zinc-200 disabled:opacity-20 text-xs px-1 leading-none">▼</button>
-            </div>
-            <span className="w-6 text-center text-xs text-zinc-500 shrink-0">#{i + 1}</span>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-zinc-200">{meta.label}</p>
-              <p className="text-xs text-zinc-500">{meta.desc}</p>
-            </div>
-          </div>
-        );
-      })}
-    </div>
+  return h('div', { className: 'space-y-1' },
+    ...order.map((key, i) => {
+      const meta = criteria.find(c => c.value === key);
+      return h('div', { key, className: 'flex items-center gap-2 p-2.5 rounded border border-border bg-panel' },
+        h('div', { className: 'flex flex-col gap-0.5' },
+          h('button', { onClick: () => move(i, -1), disabled: i === 0, className: 'text-zinc-500 hover:text-zinc-200 disabled:opacity-20 text-xs px-1 leading-none' }, '▲'),
+          h('button', { onClick: () => move(i, 1), disabled: i === order.length - 1, className: 'text-zinc-500 hover:text-zinc-200 disabled:opacity-20 text-xs px-1 leading-none' }, '▼')
+        ),
+        h('span', { className: 'w-6 text-center text-xs text-zinc-500 shrink-0' }, '#', i + 1),
+        h('div', { className: 'flex-1 min-w-0' },
+          h('p', { className: 'text-sm text-zinc-200' }, meta.label),
+          h('p', { className: 'text-xs text-zinc-500' }, meta.desc)
+        )
+      );
+    })
   );
 }
 
@@ -904,18 +606,7 @@ function SortRanker({ criteria, order, onChange }) {
 // ---------------------------------------------------------------------------
 
 function NumInput({ value, onChange, min = 0, step = 1, placeholder = '0', width = 'w-20' }) {
-  return (
-    <input
-      type="number"
-      min={min}
-      step={step}
-      value={value || ''}
-      onChange={onChange}
-      placeholder={placeholder}
-      className={`${width} bg-surface border border-border rounded px-2 py-1 text-sm text-zinc-100
-                  outline-none focus:border-accent text-right`}
-    />
-  );
+  return h('input', { type: 'number', min, step, value: value || '', onChange, placeholder, className: `${width} bg-surface border border-border rounded px-2 py-1 text-sm text-zinc-100 outline-none focus:border-accent text-right` });
 }
 
 // ---------------------------------------------------------------------------
@@ -925,24 +616,12 @@ function NumInput({ value, onChange, min = 0, step = 1, placeholder = '0', width
 function FiltersSection({ filters, setFilters, limit, setLimit, tierTop, setTierTop, tierBalanced, setTierBalanced, tierEfficient, setTierEfficient, addonCap, setAddonCap, debug, setDebug, trustProxies, setTrustProxies }) {
   const [termInput, setTermInput] = useState('');
 
-  const Row = ({ children }) => (
-    <div className="flex items-center gap-3 p-2.5 rounded border border-border bg-panel">
-      {children}
-    </div>
-  );
+  const Row = ({ children }) => h('div', { className: 'flex items-center gap-3 p-2.5 rounded border border-border bg-panel' }, children);
 
-  const LimitBtn = ({ n }) => (
-    <button
-      onClick={() => setLimit(n)}
-      className={`px-2 py-1 rounded text-xs transition border
-        ${limit === n
-          ? 'bg-accent border-accent text-white'
-          : 'border-border text-zinc-400 hover:border-zinc-400 hover:text-zinc-200'
-        }`}
-    >
-      {n === 0 ? '∞' : n}
-    </button>
-  );
+  const LimitBtn = ({ n }) => h('button', {
+    onClick: () => setLimit(n),
+    className: `px-2 py-1 rounded text-xs transition border ${limit === n ? 'bg-accent border-accent text-white' : 'border-border text-zinc-400 hover:border-zinc-400 hover:text-zinc-200'}`
+  }, n === 0 ? '∞' : n);
 
   const togglePill = (key, val) => {
     setFilters(f => {
@@ -960,292 +639,151 @@ function FiltersSection({ filters, setFilters, limit, setLimit, tierTop, setTier
 
   const removeTerm = (t) => setFilters(f => ({ ...f, excludeTerms: f.excludeTerms.filter(x => x !== t) }));
 
-  return (
-    <div className="space-y-1">
-      <label className="flex items-start gap-3 p-2.5 rounded border border-emerald-900 bg-emerald-900/10 cursor-pointer hover:border-emerald-500/50 transition select-none">
-        <input type="checkbox" checked={trustProxies} onChange={e => setTrustProxies(e.target.checked)} className="w-4 h-4 shrink-0 accent-emerald-500 mt-0.5" />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-emerald-400">Trust addon caches (Bypass Proxy Trap)</p>
-          <p className="text-xs text-zinc-400 mt-1">Enable ONLY if your proxy addons are explicitly set to "Cached Only".</p>
-        </div>
-      </label>
-
-      {/* Cached only */}
-      <label className="flex items-center gap-3 p-2.5 rounded border border-border bg-panel
-                        cursor-pointer hover:border-zinc-500 transition select-none">
-        <input
-          type="checkbox"
-          checked={filters.cachedOnly}
-          onChange={e => setFilters(f => ({ ...f, cachedOnly: e.target.checked }))}
-          className="w-4 h-4 shrink-0 accent-violet-600"
-        />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm text-zinc-200">Cached / debrid only</p>
-          <p className="text-xs text-zinc-500">Hide streams without the ⚡ instant-play indicator</p>
-        </div>
-      </label>
-
-      {/* Keyword exclusion */}
-      <div className="p-2.5 rounded border border-border bg-panel space-y-2">
-        <div>
-          <p className="text-sm text-zinc-200">Exclude keywords</p>
-          <p className="text-xs text-zinc-500">Hide streams whose name/title contains any of these terms</p>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {EXCLUDE_PRESETS.map(t => {
-            const active = filters.excludeTerms.includes(t);
-            return (
-              <button
-                key={t}
-                onClick={() => active ? removeTerm(t) : setFilters(f => ({ ...f, excludeTerms: [...f.excludeTerms, t] }))}
-                className={`px-2.5 py-1 rounded text-xs transition border ${
-                  active
-                    ? 'bg-accent border-accent text-white'
-                    : 'border-border text-zinc-400 hover:border-zinc-400 hover:text-zinc-200'
-                }`}
-              >{t}</button>
-            );
-          })}
-        </div>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={termInput}
-            onChange={e => setTermInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && addTerm()}
-            placeholder="CAM, TS, HDCAM…"
-            className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-zinc-100
-                       outline-none focus:border-accent min-w-0"
-          />
-          <button
-            onClick={addTerm}
-            disabled={!termInput.trim()}
-            className="shrink-0 px-3 py-1 rounded border border-accent text-accent text-sm
-                       hover:bg-accent hover:text-white disabled:opacity-40 transition"
-          >Add</button>
-        </div>
-        {filters.excludeTerms.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {filters.excludeTerms.map(t => (
-              <span key={t} className="flex items-center gap-1 px-2 py-0.5 rounded bg-surface border border-border text-xs text-zinc-300">
-                {t}
-                <button onClick={() => removeTerm(t)} className="text-zinc-500 hover:text-red-400 transition leading-none">×</button>
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Required HDR */}
-      <div className="p-2.5 rounded border border-border bg-panel space-y-2">
-        <div>
-          <p className="text-sm text-zinc-200">Required HDR</p>
-          <p className="text-xs text-zinc-500">Keep only streams with one of these HDR tags (streams with no HDR tag always pass)</p>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {HDR_PILL_OPTIONS.map(h => (
-            <button
-              key={h}
-              onClick={() => togglePill('requiredHdr', h)}
-              className={`px-2.5 py-1 rounded text-xs transition border ${
-                filters.requiredHdr.includes(h)
-                  ? 'bg-accent border-accent text-white'
-                  : 'border-border text-zinc-400 hover:border-zinc-400 hover:text-zinc-200'
-              }`}
-            >{h}</button>
-          ))}
-        </div>
-      </div>
-
-      {/* Required Codec */}
-      <div className="p-2.5 rounded border border-border bg-panel space-y-2">
-        <div>
-          <p className="text-sm text-zinc-200">Required codec</p>
-          <p className="text-xs text-zinc-500">Keep only streams with one of these codec tags (streams with no codec tag always pass)</p>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {CODEC_PILL_OPTIONS.map(c => (
-            <button
-              key={c}
-              onClick={() => togglePill('requiredCodec', c)}
-              className={`px-2.5 py-1 rounded text-xs transition border ${
-                filters.requiredCodec.includes(c)
-                  ? 'bg-accent border-accent text-white'
-                  : 'border-border text-zinc-400 hover:border-zinc-400 hover:text-zinc-200'
-              }`}
-            >{c}</button>
-          ))}
-        </div>
-      </div>
-
-      {/* Required Source */}
-      <div className="p-2.5 rounded border border-border bg-panel space-y-2">
-        <div>
-          <p className="text-sm text-zinc-200">Required source</p>
-          <p className="text-xs text-zinc-500">Keep only streams with one of these source tags (streams with no source tag always pass)</p>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {SOURCE_PILL_OPTIONS.map(s => (
-            <button
-              key={s}
-              onClick={() => togglePill('requiredSource', s)}
-              className={`px-2.5 py-1 rounded text-xs transition border ${
-                filters.requiredSource.includes(s)
-                  ? 'bg-accent border-accent text-white'
-                  : 'border-border text-zinc-400 hover:border-zinc-400 hover:text-zinc-200'
-              }`}
-            >{s}</button>
-          ))}
-        </div>
-      </div>
-
-      {/* Required Audio */}
-      <div className="p-2.5 rounded border border-border bg-panel space-y-2">
-        <div>
-          <p className="text-sm text-zinc-200">Required audio</p>
-          <p className="text-xs text-zinc-500">Keep only streams with one of these audio tags (streams with no audio tag always pass)</p>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {AUDIO_PILL_OPTIONS.map(a => (
-            <button
-              key={a}
-              onClick={() => togglePill('requiredAudio', a)}
-              className={`px-2.5 py-1 rounded text-xs transition border ${
-                filters.requiredAudio.includes(a)
-                  ? 'bg-accent border-accent text-white'
-                  : 'border-border text-zinc-400 hover:border-zinc-400 hover:text-zinc-200'
-              }`}
-            >{a}</button>
-          ))}
-        </div>
-      </div>
-
-      {/* Min seeders */}
-      <Row>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm text-zinc-200">Min seeders</p>
-          <p className="text-xs text-zinc-500">Hide torrents below this seeder count (0 = off)</p>
-        </div>
-        <NumInput
-          value={filters.minSeeders}
-          onChange={e => setFilters(f => ({ ...f, minSeeders: Math.max(0, parseInt(e.target.value) || 0) }))}
-          placeholder="0"
-        />
-      </Row>
-
-      {/* Max size */}
-      <Row>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm text-zinc-200">Max file size (GB)</p>
-          <p className="text-xs text-zinc-500">Hide files larger than this (0 = off)</p>
-        </div>
-        <NumInput
-          value={filters.maxSizeGb}
-          onChange={e => setFilters(f => ({ ...f, maxSizeGb: Math.max(0, parseFloat(e.target.value) || 0) }))}
-          step={0.1}
-          placeholder="∞"
-        />
-      </Row>
-
-      {/* Min resolution */}
-      <Row>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm text-zinc-200">Min resolution</p>
-          <p className="text-xs text-zinc-500">Hide streams below this quality (unknown resolution always passes)</p>
-        </div>
-        <select
-          value={filters.minResolution}
-          onChange={e => setFilters(f => ({ ...f, minResolution: e.target.value }))}
-          className="bg-panel border border-border rounded px-2 py-1 text-sm text-zinc-200 focus:outline-none focus:border-zinc-400"
-        >
-          <option value="">Off</option>
-          <option value="720p">720p+ (exclude 480p / 360p)</option>
-          <option value="1080p">1080p+ (exclude 720p and below)</option>
-          <option value="2160p">2160p / 4K only</option>
-        </select>
-      </Row>
-
-      {/* Stream limit */}
-      <Row>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm text-zinc-200">Stream limit</p>
-          <p className="text-xs text-zinc-500">Max streams returned to Stremio (0 = unlimited)</p>
-        </div>
-        <div className="flex items-center gap-1">
-          <LimitBtn n={20} />
-          <LimitBtn n={50} />
-          <LimitBtn n={0} />
-          <NumInput
-            value={limit}
-            onChange={e => setLimit(Math.max(0, parseInt(e.target.value) || 0))}
-            placeholder="∞"
-            width="w-16"
-          />
-        </div>
-      </Row>
-
-      {/* Smart Tiering */}
-      <Row>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm text-zinc-200">Smart tiering</p>
-          <p className="text-xs text-zinc-500">Per-resolution slot limits — Top: large/Remux · Balanced: compressed/WEB-DL · Efficient: hyper-compressed (0 = off)</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex flex-col items-center gap-0.5">
-            <span className="text-xs text-zinc-500">Top</span>
-            <NumInput
-              value={tierTop}
-              onChange={e => setTierTop(Math.max(0, parseInt(e.target.value) || 0))}
-              placeholder="off"
-            />
-          </div>
-          <div className="flex flex-col items-center gap-0.5">
-            <span className="text-xs text-zinc-500">Balanced</span>
-            <NumInput
-              value={tierBalanced}
-              onChange={e => setTierBalanced(Math.max(0, parseInt(e.target.value) || 0))}
-              placeholder="off"
-            />
-          </div>
-          <div className="flex flex-col items-center gap-0.5">
-            <span className="text-xs text-zinc-500">Efficient</span>
-            <NumInput
-              value={tierEfficient}
-              onChange={e => setTierEfficient(Math.max(0, parseInt(e.target.value) || 0))}
-              placeholder="off"
-            />
-          </div>
-        </div>
-      </Row>
-
-      {/* Per-addon cap */}
-      <Row>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm text-zinc-200">Max per addon</p>
-          <p className="text-xs text-zinc-500">Max results each upstream addon contributes before merge (0 = off)</p>
-        </div>
-        <NumInput
-          value={addonCap}
-          onChange={e => setAddonCap(Math.max(0, parseInt(e.target.value) || 0))}
-          placeholder="off"
-        />
-      </Row>
-
-      {/* Debug mode */}
-      <label className="flex items-center gap-3 p-2.5 rounded border border-border bg-panel
-                        cursor-pointer hover:border-zinc-500 transition select-none">
-        <input
-          type="checkbox"
-          checked={debug}
-          onChange={e => setDebug(e.target.checked)}
-          className="w-4 h-4 shrink-0 accent-violet-600"
-        />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm text-zinc-200">Debug mode</p>
-          <p className="text-xs text-zinc-500">Appends a stream entry in Stremio listing any sub-addons that timed out</p>
-        </div>
-      </label>
-    </div>
+  return h('div', { className: 'space-y-1' },
+    h('label', { className: 'flex items-start gap-3 p-2.5 rounded border border-emerald-900 bg-emerald-900/10 cursor-pointer hover:border-emerald-500/50 transition select-none' },
+      h('input', { type: 'checkbox', checked: trustProxies, onChange: e => setTrustProxies(e.target.checked), className: 'w-4 h-4 shrink-0 accent-emerald-500 mt-0.5' }),
+      h('div', { className: 'flex-1 min-w-0' },
+        h('p', { className: 'text-sm font-bold text-emerald-400' }, 'Trust addon caches (Bypass Proxy Trap)'),
+        h('p', { className: 'text-xs text-zinc-400 mt-1' }, 'Enable ONLY if your proxy addons are explicitly set to "Cached Only".')
+      )
+    ),
+    h('label', { className: 'flex items-center gap-3 p-2.5 rounded border border-border bg-panel cursor-pointer hover:border-zinc-500 transition select-none' },
+      h('input', { type: 'checkbox', checked: filters.cachedOnly, onChange: e => setFilters(f => ({ ...f, cachedOnly: e.target.checked })), className: 'w-4 h-4 shrink-0 accent-violet-600' }),
+      h('div', { className: 'flex-1 min-w-0' },
+        h('p', { className: 'text-sm text-zinc-200' }, 'Cached / debrid only'),
+        h('p', { className: 'text-xs text-zinc-500' }, 'Hide streams without the ⚡ instant-play indicator')
+      )
+    ),
+    h('div', { className: 'p-2.5 rounded border border-border bg-panel space-y-2' },
+      h('div', null,
+        h('p', { className: 'text-sm text-zinc-200' }, 'Exclude keywords'),
+        h('p', { className: 'text-xs text-zinc-500' }, 'Hide streams whose name/title contains any of these terms')
+      ),
+      h('div', { className: 'flex flex-wrap gap-1.5' },
+        ...EXCLUDE_PRESETS.map(t => {
+          const active = filters.excludeTerms.includes(t);
+          return h('button', { key: t, onClick: () => active ? removeTerm(t) : setFilters(f => ({ ...f, excludeTerms: [...f.excludeTerms, t] })), className: `px-2.5 py-1 rounded text-xs transition border ${active ? 'bg-accent border-accent text-white' : 'border-border text-zinc-400 hover:border-zinc-400 hover:text-zinc-200'}` }, t);
+        })
+      ),
+      h('div', { className: 'flex gap-2' },
+        h('input', { type: 'text', value: termInput, onChange: e => setTermInput(e.target.value), onKeyDown: e => e.key === 'Enter' && addTerm(), placeholder: 'CAM, TS, HDCAM…', className: 'flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-zinc-100 outline-none focus:border-accent min-w-0' }),
+        h('button', { onClick: addTerm, disabled: !termInput.trim(), className: 'shrink-0 px-3 py-1 rounded border border-accent text-accent text-sm hover:bg-accent hover:text-white disabled:opacity-40 transition' }, 'Add')
+      ),
+      filters.excludeTerms.length > 0 && h('div', { className: 'flex flex-wrap gap-1.5' },
+        ...filters.excludeTerms.map(t => h('span', { key: t, className: 'flex items-center gap-1 px-2 py-0.5 rounded bg-surface border border-border text-xs text-zinc-300' },
+          t,
+          h('button', { onClick: () => removeTerm(t), className: 'text-zinc-500 hover:text-red-400 transition leading-none' }, '×')
+        ))
+      )
+    ),
+    h('div', { className: 'p-2.5 rounded border border-border bg-panel space-y-2' },
+      h('div', null,
+        h('p', { className: 'text-sm text-zinc-200' }, 'Required HDR'),
+        h('p', { className: 'text-xs text-zinc-500' }, 'Keep only streams with one of these HDR tags (streams with no HDR tag always pass)')
+      ),
+      h('div', { className: 'flex flex-wrap gap-1.5' },
+        ...HDR_PILL_OPTIONS.map(v => h('button', { key: v, onClick: () => togglePill('requiredHdr', v), className: `px-2.5 py-1 rounded text-xs transition border ${filters.requiredHdr.includes(v) ? 'bg-accent border-accent text-white' : 'border-border text-zinc-400 hover:border-zinc-400 hover:text-zinc-200'}` }, v))
+      )
+    ),
+    h('div', { className: 'p-2.5 rounded border border-border bg-panel space-y-2' },
+      h('div', null,
+        h('p', { className: 'text-sm text-zinc-200' }, 'Required codec'),
+        h('p', { className: 'text-xs text-zinc-500' }, 'Keep only streams with one of these codec tags (streams with no codec tag always pass)')
+      ),
+      h('div', { className: 'flex flex-wrap gap-1.5' },
+        ...CODEC_PILL_OPTIONS.map(v => h('button', { key: v, onClick: () => togglePill('requiredCodec', v), className: `px-2.5 py-1 rounded text-xs transition border ${filters.requiredCodec.includes(v) ? 'bg-accent border-accent text-white' : 'border-border text-zinc-400 hover:border-zinc-400 hover:text-zinc-200'}` }, v))
+      )
+    ),
+    h('div', { className: 'p-2.5 rounded border border-border bg-panel space-y-2' },
+      h('div', null,
+        h('p', { className: 'text-sm text-zinc-200' }, 'Required source'),
+        h('p', { className: 'text-xs text-zinc-500' }, 'Keep only streams with one of these source tags (streams with no source tag always pass)')
+      ),
+      h('div', { className: 'flex flex-wrap gap-1.5' },
+        ...SOURCE_PILL_OPTIONS.map(v => h('button', { key: v, onClick: () => togglePill('requiredSource', v), className: `px-2.5 py-1 rounded text-xs transition border ${filters.requiredSource.includes(v) ? 'bg-accent border-accent text-white' : 'border-border text-zinc-400 hover:border-zinc-400 hover:text-zinc-200'}` }, v))
+      )
+    ),
+    h('div', { className: 'p-2.5 rounded border border-border bg-panel space-y-2' },
+      h('div', null,
+        h('p', { className: 'text-sm text-zinc-200' }, 'Required audio'),
+        h('p', { className: 'text-xs text-zinc-500' }, 'Keep only streams with one of these audio tags (streams with no audio tag always pass)')
+      ),
+      h('div', { className: 'flex flex-wrap gap-1.5' },
+        ...AUDIO_PILL_OPTIONS.map(v => h('button', { key: v, onClick: () => togglePill('requiredAudio', v), className: `px-2.5 py-1 rounded text-xs transition border ${filters.requiredAudio.includes(v) ? 'bg-accent border-accent text-white' : 'border-border text-zinc-400 hover:border-zinc-400 hover:text-zinc-200'}` }, v))
+      )
+    ),
+    h(Row, null,
+      h('div', { className: 'flex-1 min-w-0' },
+        h('p', { className: 'text-sm text-zinc-200' }, 'Min seeders'),
+        h('p', { className: 'text-xs text-zinc-500' }, 'Hide torrents below this seeder count (0 = off)')
+      ),
+      h(NumInput, { value: filters.minSeeders, onChange: e => setFilters(f => ({ ...f, minSeeders: Math.max(0, parseInt(e.target.value) || 0) })), placeholder: '0' })
+    ),
+    h(Row, null,
+      h('div', { className: 'flex-1 min-w-0' },
+        h('p', { className: 'text-sm text-zinc-200' }, 'Max file size (GB)'),
+        h('p', { className: 'text-xs text-zinc-500' }, 'Hide files larger than this (0 = off)')
+      ),
+      h(NumInput, { value: filters.maxSizeGb, onChange: e => setFilters(f => ({ ...f, maxSizeGb: Math.max(0, parseFloat(e.target.value) || 0) })), step: 0.1, placeholder: '∞' })
+    ),
+    h(Row, null,
+      h('div', { className: 'flex-1 min-w-0' },
+        h('p', { className: 'text-sm text-zinc-200' }, 'Min resolution'),
+        h('p', { className: 'text-xs text-zinc-500' }, 'Hide streams below this quality (unknown resolution always passes)')
+      ),
+      h('select', { value: filters.minResolution, onChange: e => setFilters(f => ({ ...f, minResolution: e.target.value })), className: 'bg-panel border border-border rounded px-2 py-1 text-sm text-zinc-200 focus:outline-none focus:border-zinc-400' },
+        h('option', { value: '' }, 'Off'),
+        h('option', { value: '720p' }, '720p+ (exclude 480p / 360p)'),
+        h('option', { value: '1080p' }, '1080p+ (exclude 720p and below)'),
+        h('option', { value: '2160p' }, '2160p / 4K only')
+      )
+    ),
+    h(Row, null,
+      h('div', { className: 'flex-1 min-w-0' },
+        h('p', { className: 'text-sm text-zinc-200' }, 'Stream limit'),
+        h('p', { className: 'text-xs text-zinc-500' }, 'Max streams returned to Stremio (0 = unlimited)')
+      ),
+      h('div', { className: 'flex items-center gap-1' },
+        h(LimitBtn, { n: 20 }),
+        h(LimitBtn, { n: 50 }),
+        h(LimitBtn, { n: 0 }),
+        h(NumInput, { value: limit, onChange: e => setLimit(Math.max(0, parseInt(e.target.value) || 0)), placeholder: '∞', width: 'w-16' })
+      )
+    ),
+    h(Row, null,
+      h('div', { className: 'flex-1 min-w-0' },
+        h('p', { className: 'text-sm text-zinc-200' }, 'Smart tiering'),
+        h('p', { className: 'text-xs text-zinc-500' }, 'Per-resolution slot limits — Top: large/Remux · Balanced: compressed/WEB-DL · Efficient: hyper-compressed (0 = off)')
+      ),
+      h('div', { className: 'flex items-center gap-2' },
+        h('div', { className: 'flex flex-col items-center gap-0.5' },
+          h('span', { className: 'text-xs text-zinc-500' }, 'Top'),
+          h(NumInput, { value: tierTop, onChange: e => setTierTop(Math.max(0, parseInt(e.target.value) || 0)), placeholder: 'off' })
+        ),
+        h('div', { className: 'flex flex-col items-center gap-0.5' },
+          h('span', { className: 'text-xs text-zinc-500' }, 'Balanced'),
+          h(NumInput, { value: tierBalanced, onChange: e => setTierBalanced(Math.max(0, parseInt(e.target.value) || 0)), placeholder: 'off' })
+        ),
+        h('div', { className: 'flex flex-col items-center gap-0.5' },
+          h('span', { className: 'text-xs text-zinc-500' }, 'Efficient'),
+          h(NumInput, { value: tierEfficient, onChange: e => setTierEfficient(Math.max(0, parseInt(e.target.value) || 0)), placeholder: 'off' })
+        )
+      )
+    ),
+    h(Row, null,
+      h('div', { className: 'flex-1 min-w-0' },
+        h('p', { className: 'text-sm text-zinc-200' }, 'Max per addon'),
+        h('p', { className: 'text-xs text-zinc-500' }, 'Max results each upstream addon contributes before merge (0 = off)')
+      ),
+      h(NumInput, { value: addonCap, onChange: e => setAddonCap(Math.max(0, parseInt(e.target.value) || 0)), placeholder: 'off' })
+    ),
+    h('label', { className: 'flex items-center gap-3 p-2.5 rounded border border-border bg-panel cursor-pointer hover:border-zinc-500 transition select-none' },
+      h('input', { type: 'checkbox', checked: debug, onChange: e => setDebug(e.target.checked), className: 'w-4 h-4 shrink-0 accent-violet-600' }),
+      h('div', { className: 'flex-1 min-w-0' },
+        h('p', { className: 'text-sm text-zinc-200' }, 'Debug mode'),
+        h('p', { className: 'text-xs text-zinc-500' }, 'Appends a stream entry in Stremio listing any sub-addons that timed out')
+      )
+    )
   );
 }
 
@@ -1281,12 +819,10 @@ function loadLiveState() {
 // ---------------------------------------------------------------------------
 
 function App() {
-  // Detect deploy origin; falls back to a placeholder during local file:// preview
   const origin = window.location.origin.startsWith('file')
     ? 'https://your-app.vercel.app'
     : window.location.origin;
 
-  // Each selected addon: { url: string (transportUrl), name: string }
   const _live = loadLiveState();
   const [selected,       setSelected]       = useState(() => _live?.selected       ?? []);
   const [sort,           setSort]           = useState(() => _live?.sort           ?? DEFAULT_SORT);
@@ -1307,7 +843,6 @@ function App() {
   const [shortManifestUrl, setShortManifestUrl] = useState('');
   const [isGenerating,     setIsGenerating]     = useState(false);
 
-  // Saved presets (localStorage-backed)
   const [savedPresets, setSavedPresets] = useState(() => {
     try { return JSON.parse(localStorage.getItem('us_presets') ?? '[]'); } catch { return []; }
   });
@@ -1315,7 +850,6 @@ function App() {
     localStorage.setItem('us_presets', JSON.stringify(savedPresets));
   }, [savedPresets]);
 
-  // Auto-persist live state on every change
   useEffect(() => {
     try {
       localStorage.setItem('us_live', JSON.stringify({
@@ -1324,10 +858,8 @@ function App() {
     } catch { /* storage full / private mode */ }
   }, [selected, sort, display, limit, tierTop, tierBalanced, tierEfficient, addonCap, debug, trustProxies, filters, addonTimeouts]);
 
-  // Set of transportUrls currently selected — for O(1) lookup in browser rows
   const selectedUrls = new Set(selected.map((a) => a.url));
 
-  // --- Mutations ---
   const addFromRegistry = (addon) => {
     const url = addon.transportUrl;
     if (selectedUrls.has(url)) return;
@@ -1355,10 +887,8 @@ function App() {
     return next;
   });
 
-  // Capture current full state for named preset saving
   const getCurrentState = () => ({ selected, sort, display, limit, tierTop, tierBalanced, tierEfficient, addonCap, debug, trustProxies, filters, addonTimeouts });
 
-  // Load a named preset (full state replacement)
   const loadPreset = (preset) => {
     setSelected(preset.state.selected);
     setSort(preset.state.sort);
@@ -1374,7 +904,6 @@ function App() {
     setAddonTimeouts(preset.state.addonTimeouts ?? {});
   };
 
-  // Apply a quick-start preset: update sort always; add new addons (non-destructive)
   const applyPreset = (preset) => {
     setSort(preset.sort);
     if (preset.addons.length > 0) {
@@ -1391,7 +920,6 @@ function App() {
   const applyModeProfile = (mode) => {
     const validSelected = selected.filter(a => a.url && isValidUrl(a.url));
     const timeoutMap = Object.fromEntries(validSelected.map(a => [a.url, mode.timeoutMs]));
-
     setSort(mode.sort);
     setTierTop(mode.tierTop);
     setTierBalanced(mode.tierBalanced);
@@ -1450,26 +978,24 @@ function App() {
     reader.readAsText(file);
   };
 
-  // --- Derived values ---
   const validAddons = selected.filter((a) => a.url && isValidUrl(a.url));
   const addonUrls   = validAddons.map((a) => a.url);
   const configB64   = buildConfig(addonUrls, sort, display, { limit, tierTop, tierBalanced, tierEfficient, addonCap, debug, trustProxies, filters, addonTimeouts });
 
-  // --- Addon health check ---
   const probeAddon = async (manifestUrl) => {
     const startedAt = performance.now();
-    setAddonHealth(h => ({ ...h, [manifestUrl]: { ...(h[manifestUrl] ?? {}), status: 'checking' } }));
+    setAddonHealth(hh => ({ ...hh, [manifestUrl]: { ...(hh[manifestUrl] ?? {}), status: 'checking' } }));
     try {
       const r = await fetch(manifestUrl, { signal: AbortSignal.timeout(5000) });
       const latencyMs = Math.round(performance.now() - startedAt);
-      setAddonHealth(h => ({
-        ...h,
+      setAddonHealth(hh => ({
+        ...hh,
         [manifestUrl]: { status: r.ok ? 'ok' : 'error', latencyMs, checkedAt: Date.now() },
       }));
     } catch {
       const latencyMs = Math.round(performance.now() - startedAt);
-      setAddonHealth(h => ({
-        ...h,
+      setAddonHealth(hh => ({
+        ...hh,
         [manifestUrl]: { status: 'error', latencyMs, checkedAt: Date.now() },
       }));
     }
@@ -1492,7 +1018,6 @@ function App() {
     return () => clearInterval(id);
   }, [addonUrlKey]);
 
-  // --- Stream preview ---
   useEffect(() => {
     setPreview({ status: 'idle', count: 0, error: '', runtimeMinutes: 0, runtimeSource: '' });
   }, [configB64, previewId]);
@@ -1572,7 +1097,7 @@ function App() {
       const data = await res.json();
       setShortManifestUrl(buildManifestUrl(origin, data.id));
     } catch {
-      setShortManifestUrl(manifestUrl); // fallback to long URL on error
+      setShortManifestUrl(manifestUrl);
     }
     setIsGenerating(false);
   };
@@ -1595,9 +1120,9 @@ function App() {
   const tierPenalty = (2 * tierTop) + tierBalanced + tierEfficient;
 
   const healthStates = validAddons.map(a => addonHealth[toTransportUrl(a.url) + '/manifest.json'] ?? { status: 'idle' });
-  const errorPenalty = healthStates.filter(h => h.status === 'error').length * 12;
-  const checkingPenalty = healthStates.filter(h => h.status === 'checking').length * 3;
-  const highLatencyPenalty = healthStates.filter(h => typeof h.latencyMs === 'number' && h.latencyMs > 1500).length * 4;
+  const errorPenalty = healthStates.filter(hs => hs.status === 'error').length * 12;
+  const checkingPenalty = healthStates.filter(hs => hs.status === 'checking').length * 3;
+  const highLatencyPenalty = healthStates.filter(hs => typeof hs.latencyMs === 'number' && hs.latencyMs > 1500).length * 4;
 
   const speedScore = Math.max(0, Math.min(100,
     100 - addonCountPenalty - timeoutPenalty - capPenalty - tierPenalty - errorPenalty - checkingPenalty - highLatencyPenalty
@@ -1608,410 +1133,245 @@ function App() {
     { label: `avg timeout ${Math.round(avgTimeoutMs / 1000)}s`, value: timeoutPenalty },
     { label: addonCap > 0 ? `addon-cap ${addonCap}` : 'uncapped addon-cap', value: capPenalty },
     { label: `tier load ${tierTop}/${tierBalanced}/${tierEfficient}`, value: tierPenalty },
-    { label: `${healthStates.filter(h => h.status === 'error').length} health errors`, value: errorPenalty },
+    { label: `${healthStates.filter(hs => hs.status === 'error').length} health errors`, value: errorPenalty },
   ].filter(r => r.value > 0).sort((a, b) => b.value - a.value).slice(0, 2);
 
-  return (
-    <div className="max-w-2xl mx-auto px-4 py-10 space-y-8">
+  return h('div', { className: 'max-w-2xl mx-auto px-4 py-10 space-y-8' },
 
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-zinc-100 tracking-tight">
-          Stream Merger
-          <span className="ml-2 text-xs font-normal text-zinc-500 align-middle">aggregator</span>
-        </h1>
-        <p className="mt-1 text-sm text-zinc-400">
-          Pick your upstream addons from the registry below, set a sort preference,
-          then install the generated manifest in Stremio.
-        </p>
-      </div>
+    h('div', null,
+      h('h1', { className: 'text-2xl font-bold text-zinc-100 tracking-tight' },
+        'Stream Merger',
+        h('span', { className: 'ml-2 text-xs font-normal text-zinc-500 align-middle' }, 'aggregator')
+      ),
+      h('p', { className: 'mt-1 text-sm text-zinc-400' }, 'Pick your upstream addons from the registry below, set a sort preference, then install the generated manifest in Stremio.')
+    ),
 
-      {/* Step 1 — Addons */}
-      <section className="space-y-4">
-        <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-          1 · Upstream addons
-          <span className="ml-2 font-normal normal-case text-zinc-600">(order = fetch priority)</span>
-        </h2>
+    h('section', { className: 'space-y-4' },
+      h('h2', { className: 'text-xs font-semibold uppercase tracking-widest text-zinc-500' },
+        '1 · Upstream addons',
+        h('span', { className: 'ml-2 font-normal normal-case text-zinc-600' }, '(order = fetch priority)')
+      ),
+      h(PresetsRow, { onApply: applyPreset, onReset: resetToDefaults }),
+      h(ModeProfilesRow, { onApply: applyModeProfile }),
+      h(SavedPresetsRow, { savedPresets, setSavedPresets, getCurrentState, onLoad: loadPreset }),
+      h('div', { className: 'border-t border-border pt-4 space-y-4' },
+        h(AddonBrowser, { selectedUrls, onAdd: addFromRegistry }),
+        h(CustomUrlInput, { onAdd: addCustomUrl }),
+        h(DebridQuickAdd, { onAdd: addDebridAddon })
+      ),
+      selected.length > 0 && h('div', { className: 'space-y-2 pt-2 border-t border-border' },
+        h('div', { className: 'flex items-center justify-between' },
+          h('p', { className: 'text-xs text-zinc-500 uppercase tracking-widest' }, `Selected (${selected.length})`),
+          h('button', { onClick: () => setSelected([]), className: 'text-xs px-2 py-0.5 rounded border border-zinc-700 text-zinc-500 hover:border-red-500/50 hover:text-red-400 transition' }, 'Clear all')
+        ),
+        ...selected.map((addon, i) => h(SelectedAddonRow, {
+          key: `${addon.url}-${i}`,
+          index: i,
+          url: addon.url,
+          name: addon.name,
+          onRemove: () => removeAddon(i),
+          onMoveUp: () => moveAddon(i, -1),
+          onMoveDown: () => moveAddon(i, 1),
+          isFirst: i === 0,
+          isLast: i === selected.length - 1,
+          health: addonHealth[toTransportUrl(addon.url) + '/manifest.json'],
+          onPing: () => probeAddon(toTransportUrl(addon.url) + '/manifest.json'),
+          timeout: addonTimeouts[addon.url] ?? 0,
+          onTimeoutChange: v => setAddonTimeouts(prev => ({ ...prev, [addon.url]: v })),
+        }))
+      ),
+      selected.length > 0 && h('div', { className: 'p-3 rounded border border-border bg-panel space-y-2' },
+        h('div', { className: 'flex items-center justify-between' },
+          h('p', { className: 'text-xs text-zinc-500 uppercase tracking-widest' }, 'Health'),
+          h('button', { onClick: checkAllAddons, className: 'text-xs px-2 py-1 rounded border border-border text-zinc-400 hover:border-zinc-400 hover:text-zinc-200 transition' }, 'Check all')
+        ),
+        h('div', { className: 'space-y-1.5' },
+          ...selected.map((addon, i) => {
+            const mUrl = toTransportUrl(addon.url) + '/manifest.json';
+            const ah = addonHealth[mUrl] ?? { status: 'idle' };
+            const dot = ah.status === 'ok' ? 'text-emerald-400' : ah.status === 'error' ? 'text-red-400' : ah.status === 'checking' ? 'text-yellow-400 animate-pulse' : 'text-zinc-600';
+            return h('div', { key: `health-${addon.url}-${i}`, className: 'flex items-center justify-between text-xs' },
+              h('span', { className: 'truncate text-zinc-300 max-w-[45%]' }, addon.name || addon.url),
+              h('span', { className: 'flex items-center gap-2 text-zinc-500' },
+                h('span', { className: dot }, '●'),
+                h('span', null, ah.status),
+                h('span', null, typeof ah.latencyMs === 'number' ? `${ah.latencyMs}ms` : '—'),
+                h('span', null, ah.checkedAt ? new Date(ah.checkedAt).toLocaleTimeString() : '—')
+              )
+            );
+          })
+        )
+      )
+    ),
 
-        {/* Quick-start presets */}
-        <PresetsRow onApply={applyPreset} onReset={resetToDefaults} />
-        <ModeProfilesRow onApply={applyModeProfile} />
+    h('section', { className: 'space-y-3' },
+      h('h2', { className: 'text-xs font-semibold uppercase tracking-widest text-zinc-500' },
+        '2 · Sort priority',
+        h('span', { className: 'ml-2 font-normal normal-case text-zinc-600' }, '(#1 wins, ties broken by #2, etc.)')
+      ),
+      h(SortRanker, { criteria: SORT_CRITERIA, order: sort, onChange: setSort })
+    ),
 
-        {/* Named saved presets */}
-        <SavedPresetsRow
-          savedPresets={savedPresets}
-          setSavedPresets={setSavedPresets}
-          getCurrentState={getCurrentState}
-          onLoad={loadPreset}
-        />
+    h('section', { className: 'space-y-3' },
+      h('h2', { className: 'text-xs font-semibold uppercase tracking-widest text-zinc-500' },
+        '3 · Stream card display',
+        h('span', { className: 'ml-2 font-normal normal-case text-zinc-600' }, '(what shows on each result in Stremio)')
+      ),
+      h(DisplayToggles, { options: DISPLAY_OPTIONS, enabled: display, onChange: setDisplay })
+    ),
 
-        <div className="border-t border-border pt-4 space-y-4">
-          {/* Mode A — Registry browser */}
-          <AddonBrowser selectedUrls={selectedUrls} onAdd={addFromRegistry} />
+    h('section', { className: 'space-y-3' },
+      h('div', { className: 'flex items-center justify-between' },
+        h('h2', { className: 'text-xs font-semibold uppercase tracking-widest text-zinc-500' },
+          '3.5 · Filters & limits',
+          h('span', { className: 'ml-2 font-normal normal-case text-zinc-600' }, '(optional — all off by default)')
+        ),
+        h('button', { onClick: () => setFilters(DEFAULT_FILTERS), className: 'text-xs px-2 py-0.5 rounded border border-zinc-700 text-zinc-500 hover:border-red-500/50 hover:text-red-400 transition' }, 'Reset filters')
+      ),
+      h(FiltersSection, {
+        filters, setFilters,
+        limit, setLimit,
+        tierTop, setTierTop,
+        tierBalanced, setTierBalanced,
+        tierEfficient, setTierEfficient,
+        addonCap, setAddonCap,
+        debug, setDebug,
+        trustProxies, setTrustProxies,
+      })
+    ),
 
-          {/* Mode B — Custom URL */}
-          <CustomUrlInput onAdd={addCustomUrl} />
+    h('section', { className: 'space-y-3' },
+      h('div', { className: 'flex items-center justify-between' },
+        h('h2', { className: 'text-xs font-semibold uppercase tracking-widest text-zinc-500' }, '4 · Install'),
+        h('button', { onClick: () => { if (window.confirm('Reset all addons and settings to defaults?')) resetToDefaults(); }, className: 'text-xs px-2 py-1 rounded border border-zinc-700 text-zinc-500 hover:border-red-500/50 hover:text-red-400 transition' }, '↺ Reset all')
+      ),
+      !isReady && h('p', { className: 'text-sm text-zinc-500' }, 'Add at least one addon above to generate your link.'),
+      isReady && h('div', { className: 'space-y-3' },
+        h('div', { className: 'rounded border border-border bg-panel p-3' },
+          h('div', { className: 'flex items-center justify-between' },
+            h('p', { className: 'text-xs text-zinc-500 uppercase tracking-widest' }, 'Estimated response speed'),
+            h('span', { className: `text-xs px-2 py-0.5 rounded border ${speedLabel === 'Fast' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : speedLabel === 'Medium' ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-red-500/10 border-red-500/30 text-red-400'}` },
+              `${speedLabel} · ${speedScore}/100`
+            )
+          ),
+          h('p', { className: 'text-xs text-zinc-600 mt-2' },
+            speedReasons.length > 0 ? `Top factors: ${speedReasons.map(r => r.label).join(', ')}` : 'No major speed penalties detected.'
+          )
+        ),
+        h('div', { className: 'rounded border border-border bg-panel p-3' },
+          h('p', { className: 'text-xs text-zinc-500 mb-1.5' }, 'Manifest URL'),
+          h('div', { className: 'flex items-center gap-2' },
+            h('code', { className: 'flex-1 text-xs text-zinc-300 break-all leading-relaxed' }, manifestUrl),
+            h(CopyButton, { text: manifestUrl })
+          )
+        ),
+        h('div', { className: 'flex items-center gap-3 flex-wrap' },
+          h('div', { className: 'flex items-center gap-2' },
+            h('button', { onClick: runPreview, disabled: !isReady || window.location.protocol === 'file:' || preview.status === 'loading', className: 'px-3 py-1.5 rounded border border-border text-xs text-zinc-400 hover:border-zinc-400 hover:text-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition' },
+              preview.status === 'loading' ? 'Loading…' : 'Preview streams'
+            ),
+            h('select', { value: previewId, onChange: e => setPreviewId(e.target.value), className: 'border border-border text-zinc-300 bg-surface text-sm rounded px-2 py-1' },
+              ...PREVIEW_OPTIONS.map(o => h('option', { key: o.value, value: o.value }, o.label))
+            )
+          ),
+          h('button', { onClick: runSmokeTest, disabled: !isReady || window.location.protocol === 'file:' || smokeTest.status === 'loading', className: 'px-3 py-1.5 rounded border border-border text-xs text-zinc-400 hover:border-zinc-400 hover:text-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition' },
+            smokeTest.status === 'loading' ? 'Testing…' : 'Test my config (3-title smoke)'
+          ),
+          preview.status === 'ok' && h('span', { className: 'text-xs px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400' },
+            `${preview.count} stream${preview.count !== 1 ? 's' : ''}`
+          ),
+          preview.status === 'error' && h('span', { className: 'text-xs px-2 py-0.5 rounded bg-red-500/10 border border-red-500/30 text-red-400' },
+            `Error: ${preview.error}`
+          ),
+          (preview.status === 'ok' || preview.status === 'error') && h('span', { className: 'text-xs text-zinc-600' },
+            `Used: ${PREVIEW_OPTIONS.find(o => o.value === previewId)?.label ?? previewId}`
+          )
+        ),
+        (preview.status === 'ok' || preview.status === 'error') && h('div', { className: 'text-xs text-zinc-600' },
+          `Runtime diagnostics: ${preview.runtimeMinutes > 0 ? `${preview.runtimeMinutes} min` : '0 min'} · source: ${preview.runtimeSource || 'fallback'}`
+        ),
+        smokeTest.status !== 'idle' && h('div', { className: 'rounded border border-border bg-panel p-3 space-y-2' },
+          h('div', { className: 'flex items-center justify-between' },
+            h('p', { className: 'text-xs text-zinc-500 uppercase tracking-widest' }, 'Smoke test'),
+            smokeTest.status === 'done' && h('span', { className: `text-xs px-2 py-0.5 rounded border ${smokeTest.passed === 3 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-red-500/10 border-red-500/30 text-red-400'}` },
+              `${smokeTest.passed}/3 passed`
+            )
+          ),
+          ...smokeTest.results.map((r, i) => h('div', { key: `smoke-${i}`, className: 'text-xs text-zinc-400 flex flex-wrap gap-x-3 gap-y-1' },
+            h('span', { className: r.ok ? 'text-emerald-400' : 'text-red-400' }, r.ok ? 'PASS' : 'FAIL'),
+            h('span', null, r.label),
+            h('span', null, `HTTP ${r.statusCode || 'ERR'}`),
+            h('span', null, `${r.streamCount} streams`),
+            h('span', null, `${r.ms}ms`),
+            h('span', null, `runtime: ${r.runtimeMinutes > 0 ? `${r.runtimeMinutes}m` : '0m'} (${r.runtimeSource || 'fallback'})`)
+          ))
+        ),
+        h('div', { className: 'flex flex-wrap gap-2 text-xs text-zinc-500' },
+          h('span', { className: 'px-2 py-0.5 rounded bg-panel border border-border' }, `${validAddons.length} source${validAddons.length !== 1 ? 's' : ''}`),
+          h('span', { className: 'px-2 py-0.5 rounded bg-panel border border-border' }, `sort: ${sort.join(' → ')}`),
+          h('span', { className: 'px-2 py-0.5 rounded bg-panel border border-border' }, `display: ${display.length === DISPLAY_OPTIONS.length ? 'all fields' : `${display.length}/${DISPLAY_OPTIONS.length} fields`}`),
+          filters.cachedOnly && h('span', { className: 'px-2 py-0.5 rounded bg-panel border border-border' }, 'cached only'),
+          filters.excludeTerms.length > 0 && h('span', { className: 'px-2 py-0.5 rounded bg-panel border border-border' }, `excl: ${filters.excludeTerms.join(', ')}`),
+          filters.requiredHdr.length > 0 && h('span', { className: 'px-2 py-0.5 rounded bg-panel border border-border' }, filters.requiredHdr.join('/')),
+          filters.requiredCodec.length > 0 && h('span', { className: 'px-2 py-0.5 rounded bg-panel border border-border' }, `codec: ${filters.requiredCodec.join('/')}`),
+          filters.requiredSource.length > 0 && h('span', { className: 'px-2 py-0.5 rounded bg-panel border border-border' }, `src: ${filters.requiredSource.join('/')}`),
+          filters.requiredAudio.length > 0 && h('span', { className: 'px-2 py-0.5 rounded bg-panel border border-border' }, `audio: ${filters.requiredAudio.join('/')}`),
+          filters.minSeeders > 0 && h('span', { className: 'px-2 py-0.5 rounded bg-panel border border-border' }, `≥${filters.minSeeders} seeders`),
+          filters.maxSizeGb > 0 && h('span', { className: 'px-2 py-0.5 rounded bg-panel border border-border' }, `≤${filters.maxSizeGb} GB`),
+          filters.minResolution && h('span', { className: 'px-2 py-0.5 rounded bg-panel border border-border' }, `≥${filters.minResolution}`),
+          limit > 0 && h('span', { className: 'px-2 py-0.5 rounded bg-panel border border-border' }, `limit: ${limit}`),
+          (tierTop > 0 || tierBalanced > 0 || tierEfficient > 0) && h('span', { className: 'px-2 py-0.5 rounded bg-panel border border-border' }, `tiers: ${tierTop}T+${tierBalanced}B+${tierEfficient}E`),
+          addonCap > 0 && h('span', { className: 'px-2 py-0.5 rounded bg-panel border border-border' }, `addon-cap: ${addonCap}`),
+          trustProxies && h('span', { className: 'px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/30 text-emerald-400' }, 'trusted'),
+          debug && h('span', { className: 'px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/30 text-amber-400' }, 'debug')
+        ),
+        h('div', { className: 'flex flex-col gap-3' },
+          !shortManifestUrl
+            ? h('button', { onClick: generateShortLink, disabled: isGenerating || window.location.protocol === 'file:', className: 'px-4 py-2 rounded bg-accent hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm transition text-center font-semibold' },
+                isGenerating ? 'Generating Install Link…' : 'Generate Install Link'
+              )
+            : h('div', { className: 'flex flex-wrap gap-3' },
+                h(InstallButton, { manifestUrl: shortManifestUrl }),
+                h(CopyButton, { text: shortManifestUrl.replace(/^https?:\/\//, 'stremio://') }),
+                h('a', { href: `https://web.stremio.com/#/?addonOpen=${encodeURIComponent(shortManifestUrl)}`, target: '_blank', rel: 'noopener noreferrer', className: 'px-4 py-2 rounded border border-border text-zinc-300 hover:border-zinc-400 hover:text-white text-sm transition text-center' }, 'Open in Stremio Web')
+              )
+        ),
+        h('details', { className: 'text-xs text-zinc-600' },
+          h('summary', { className: 'cursor-pointer hover:text-zinc-400 transition' }, 'Show raw config (debug)'),
+          h('pre', { className: 'mt-2 p-3 rounded bg-panel border border-border overflow-x-auto text-zinc-400' },
+            JSON.stringify(
+              {
+                addons: addonUrls, sort, display,
+                ...(limit        > 0 ? { limit }        : {}),
+                ...(tierTop       > 0 ? { tierTop }       : {}),
+                ...(tierBalanced  > 0 ? { tierBalanced }  : {}),
+                ...(tierEfficient > 0 ? { tierEfficient } : {}),
+                ...(addonCap      > 0 ? { addonCap }      : {}),
+                ...(debug            ? { debug }          : {}),
+                ...(trustProxies     ? { trustProxies }   : {}),
+                ...(hasActiveFilters ? { filters }        : {}),
+              },
+              null, 2
+            )
+          )
+        )
+      ),
+      h('div', { className: 'flex flex-wrap gap-2 items-center' },
+        h('span', { className: 'text-xs text-zinc-600' }, 'Config file:'),
+        h('button', { onClick: exportConfig, className: 'px-3 py-1.5 rounded border border-border text-xs text-zinc-400 hover:border-zinc-400 hover:text-zinc-200 transition' }, 'Export JSON'),
+        h('button', { onClick: () => importInputRef.current?.click(), className: 'px-3 py-1.5 rounded border border-border text-xs text-zinc-400 hover:border-zinc-400 hover:text-zinc-200 transition' }, 'Import JSON'),
+        h('input', { ref: importInputRef, type: 'file', accept: '.json,application/json', className: 'hidden', onChange: e => { importConfig(e.target.files?.[0]); e.target.value = ''; } })
+      )
+    ),
 
-          {/* Mode C — Debrid quick-add */}
-          <DebridQuickAdd onAdd={addDebridAddon} />
-        </div>
-
-        {/* Selected addons */}
-        {selected.length > 0 && (
-          <div className="space-y-2 pt-2 border-t border-border">
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-zinc-500 uppercase tracking-widest">Selected ({selected.length})</p>
-              <button
-                onClick={() => setSelected([])}
-                className="text-xs px-2 py-0.5 rounded border border-zinc-700 text-zinc-500 hover:border-red-500/50 hover:text-red-400 transition"
-              >
-                Clear all
-              </button>
-            </div>
-            {selected.map((addon, i) => (
-              <SelectedAddonRow
-                key={`${addon.url}-${i}`}
-                index={i}
-                url={addon.url}
-                name={addon.name}
-                onRemove={() => removeAddon(i)}
-                onMoveUp={() => moveAddon(i, -1)}
-                onMoveDown={() => moveAddon(i, 1)}
-                isFirst={i === 0}
-                isLast={i === selected.length - 1}
-                health={addonHealth[toTransportUrl(addon.url) + '/manifest.json']}
-                onPing={() => probeAddon(toTransportUrl(addon.url) + '/manifest.json')}
-                timeout={addonTimeouts[addon.url] ?? 0}
-                onTimeoutChange={v => setAddonTimeouts(prev => ({ ...prev, [addon.url]: v }))}
-              />
-            ))}
-          </div>
-        )}
-
-        {selected.length > 0 && (
-          <div className="p-3 rounded border border-border bg-panel space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-zinc-500 uppercase tracking-widest">Health</p>
-              <button
-                onClick={checkAllAddons}
-                className="text-xs px-2 py-1 rounded border border-border text-zinc-400 hover:border-zinc-400 hover:text-zinc-200 transition"
-              >
-                Check all
-              </button>
-            </div>
-            <div className="space-y-1.5">
-              {selected.map((addon, i) => {
-                const manifestUrl = toTransportUrl(addon.url) + '/manifest.json';
-                const h = addonHealth[manifestUrl] ?? { status: 'idle' };
-                const dot = h.status === 'ok' ? 'text-emerald-400' : h.status === 'error' ? 'text-red-400' : h.status === 'checking' ? 'text-yellow-400 animate-pulse' : 'text-zinc-600';
-                return (
-                  <div key={`health-${addon.url}-${i}`} className="flex items-center justify-between text-xs">
-                    <span className="truncate text-zinc-300 max-w-[45%]">{addon.name || addon.url}</span>
-                    <span className="flex items-center gap-2 text-zinc-500">
-                      <span className={dot}>●</span>
-                      <span>{h.status}</span>
-                      <span>{typeof h.latencyMs === 'number' ? `${h.latencyMs}ms` : '—'}</span>
-                      <span>{h.checkedAt ? new Date(h.checkedAt).toLocaleTimeString() : '—'}</span>
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </section>
-
-      {/* Step 2 — Sort */}
-      <section className="space-y-3">
-        <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-          2 · Sort priority
-          <span className="ml-2 font-normal normal-case text-zinc-600">(#1 wins, ties broken by #2, etc.)</span>
-        </h2>
-        <SortRanker criteria={SORT_CRITERIA} order={sort} onChange={setSort} />
-      </section>
-
-      {/* Step 3 — Display */}
-      <section className="space-y-3">
-        <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-          3 · Stream card display
-          <span className="ml-2 font-normal normal-case text-zinc-600">(what shows on each result in Stremio)</span>
-        </h2>
-        <DisplayToggles options={DISPLAY_OPTIONS} enabled={display} onChange={setDisplay} />
-      </section>
-
-      {/* Step 3.5 — Filters & Limits */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-            3.5 · Filters &amp; limits
-            <span className="ml-2 font-normal normal-case text-zinc-600">(optional — all off by default)</span>
-          </h2>
-          <button
-            onClick={() => setFilters(DEFAULT_FILTERS)}
-            className="text-xs px-2 py-0.5 rounded border border-zinc-700 text-zinc-500 hover:border-red-500/50 hover:text-red-400 transition"
-          >
-            Reset filters
-          </button>
-        </div>
-        <FiltersSection
-          filters={filters}             setFilters={setFilters}
-          limit={limit}                 setLimit={setLimit}
-          tierTop={tierTop}             setTierTop={setTierTop}
-          tierBalanced={tierBalanced}   setTierBalanced={setTierBalanced}
-          tierEfficient={tierEfficient} setTierEfficient={setTierEfficient}
-          addonCap={addonCap}           setAddonCap={setAddonCap}
-          debug={debug}                 setDebug={setDebug}
-          trustProxies={trustProxies}   setTrustProxies={setTrustProxies}
-        />
-      </section>
-
-      {/* Step 4 — Output */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500">4 · Install</h2>
-          <button
-            onClick={() => { if (window.confirm('Reset all addons and settings to defaults?')) resetToDefaults(); }}
-            className="text-xs px-2 py-1 rounded border border-zinc-700 text-zinc-500 hover:border-red-500/50 hover:text-red-400 transition"
-          >
-            ↺ Reset all
-          </button>
-        </div>
-
-        {!isReady && (
-          <p className="text-sm text-zinc-500">Add at least one addon above to generate your link.</p>
-        )}
-
-        {isReady && (
-          <div className="space-y-3">
-            <div className="rounded border border-border bg-panel p-3">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-zinc-500 uppercase tracking-widest">Estimated response speed</p>
-                <span className={`text-xs px-2 py-0.5 rounded border ${
-                  speedLabel === 'Fast'
-                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                    : speedLabel === 'Medium'
-                    ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
-                    : 'bg-red-500/10 border-red-500/30 text-red-400'
-                }`}>
-                  {speedLabel} · {speedScore}/100
-                </span>
-              </div>
-              <p className="text-xs text-zinc-600 mt-2">
-                {speedReasons.length > 0 ? `Top factors: ${speedReasons.map(r => r.label).join(', ')}` : 'No major speed penalties detected.'}
-              </p>
-            </div>
-
-            {/* Manifest URL display */}
-            <div className="rounded border border-border bg-panel p-3">
-              <p className="text-xs text-zinc-500 mb-1.5">Manifest URL</p>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 text-xs text-zinc-300 break-all leading-relaxed">
-                  {manifestUrl}
-                </code>
-                <CopyButton text={manifestUrl} />
-              </div>
-            </div>
-
-            {/* Stream count preview */}
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={runPreview}
-                  disabled={!isReady || window.location.protocol === 'file:' || preview.status === 'loading'}
-                  className="px-3 py-1.5 rounded border border-border text-xs text-zinc-400 hover:border-zinc-400 hover:text-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition"
-                >
-                  {preview.status === 'loading' ? 'Loading…' : 'Preview streams'}
-                </button>
-                <select
-                  value={previewId}
-                  onChange={e => setPreviewId(e.target.value)}
-                  className="border border-border text-zinc-300 bg-surface text-sm rounded px-2 py-1"
-                >
-                  {PREVIEW_OPTIONS.map(o => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-              </div>
-              <button
-                onClick={runSmokeTest}
-                disabled={!isReady || window.location.protocol === 'file:' || smokeTest.status === 'loading'}
-                className="px-3 py-1.5 rounded border border-border text-xs text-zinc-400 hover:border-zinc-400 hover:text-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition"
-              >
-                {smokeTest.status === 'loading' ? 'Testing…' : 'Test my config (3-title smoke)'}
-              </button>
-              {preview.status === 'ok' && (
-                <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
-                  {preview.count} stream{preview.count !== 1 ? 's' : ''}
-                </span>
-              )}
-              {preview.status === 'error' && (
-                <span className="text-xs px-2 py-0.5 rounded bg-red-500/10 border border-red-500/30 text-red-400">
-                  Error: {preview.error}
-                </span>
-              )}
-              {(preview.status === 'ok' || preview.status === 'error') && (
-                <span className="text-xs text-zinc-600">Used: {PREVIEW_OPTIONS.find(o => o.value === previewId)?.label ?? previewId}</span>
-              )}
-            </div>
-
-            {(preview.status === 'ok' || preview.status === 'error') && (
-              <div className="text-xs text-zinc-600">
-                Runtime diagnostics: {preview.runtimeMinutes > 0 ? `${preview.runtimeMinutes} min` : '0 min'} · source: {preview.runtimeSource || 'fallback'}
-              </div>
-            )}
-
-            {smokeTest.status !== 'idle' && (
-              <div className="rounded border border-border bg-panel p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-zinc-500 uppercase tracking-widest">Smoke test</p>
-                  {smokeTest.status === 'done' && (
-                    <span className={`text-xs px-2 py-0.5 rounded border ${smokeTest.passed === 3 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-red-500/10 border-red-500/30 text-red-400'}`}>
-                      {smokeTest.passed}/3 passed
-                    </span>
-                  )}
-                </div>
-                {smokeTest.results.map((r, i) => (
-                  <div key={`smoke-${i}`} className="text-xs text-zinc-400 flex flex-wrap gap-x-3 gap-y-1">
-                    <span className={r.ok ? 'text-emerald-400' : 'text-red-400'}>{r.ok ? 'PASS' : 'FAIL'}</span>
-                    <span>{r.label}</span>
-                    <span>HTTP {r.statusCode || 'ERR'}</span>
-                    <span>{r.streamCount} streams</span>
-                    <span>{r.ms}ms</span>
-                    <span>runtime: {r.runtimeMinutes > 0 ? `${r.runtimeMinutes}m` : '0m'} ({r.runtimeSource || 'fallback'})</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Summary */}
-            <div className="flex flex-wrap gap-2 text-xs text-zinc-500">
-              <span className="px-2 py-0.5 rounded bg-panel border border-border">
-                {validAddons.length} source{validAddons.length !== 1 ? 's' : ''}
-              </span>
-              <span className="px-2 py-0.5 rounded bg-panel border border-border">
-                sort: {sort.join(' → ')}
-              </span>
-              <span className="px-2 py-0.5 rounded bg-panel border border-border">
-                display: {display.length === DISPLAY_OPTIONS.length ? 'all fields' : `${display.length}/${DISPLAY_OPTIONS.length} fields`}
-              </span>
-              {filters.cachedOnly && (
-                <span className="px-2 py-0.5 rounded bg-panel border border-border">cached only</span>
-              )}
-              {filters.excludeTerms.length > 0 && (
-                <span className="px-2 py-0.5 rounded bg-panel border border-border">excl: {filters.excludeTerms.join(', ')}</span>
-              )}
-              {filters.requiredHdr.length > 0 && (
-                <span className="px-2 py-0.5 rounded bg-panel border border-border">{filters.requiredHdr.join('/')}</span>
-              )}
-              {filters.requiredCodec.length > 0 && (
-                <span className="px-2 py-0.5 rounded bg-panel border border-border">codec: {filters.requiredCodec.join('/')}</span>
-              )}
-              {filters.requiredSource.length > 0 && (
-                <span className="px-2 py-0.5 rounded bg-panel border border-border">src: {filters.requiredSource.join('/')}</span>
-              )}
-              {filters.requiredAudio.length > 0 && (
-                <span className="px-2 py-0.5 rounded bg-panel border border-border">audio: {filters.requiredAudio.join('/')}</span>
-              )}
-              {filters.minSeeders > 0 && (
-                <span className="px-2 py-0.5 rounded bg-panel border border-border">≥{filters.minSeeders} seeders</span>
-              )}
-              {filters.maxSizeGb > 0 && (
-                <span className="px-2 py-0.5 rounded bg-panel border border-border">≤{filters.maxSizeGb} GB</span>
-              )}
-              {filters.minResolution && (
-                <span className="px-2 py-0.5 rounded bg-panel border border-border">≥{filters.minResolution}</span>
-              )}
-              {limit > 0 && (
-                <span className="px-2 py-0.5 rounded bg-panel border border-border">limit: {limit}</span>
-              )}
-              {(tierTop > 0 || tierBalanced > 0 || tierEfficient > 0) && (
-                <span className="px-2 py-0.5 rounded bg-panel border border-border">tiers: {tierTop}T+{tierBalanced}B+{tierEfficient}E</span>
-              )}
-              {addonCap > 0 && (
-                <span className="px-2 py-0.5 rounded bg-panel border border-border">addon-cap: {addonCap}</span>
-              )}
-              {trustProxies && <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/30 text-emerald-400">trusted</span>}
-              {debug && (
-                <span className="px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/30 text-amber-400">debug</span>
-              )}
-            </div>
-
-            {/* Install buttons */}
-            <div className="flex flex-col gap-3">
-              {!shortManifestUrl ? (
-                <button
-                  onClick={generateShortLink}
-                  disabled={isGenerating || window.location.protocol === 'file:'}
-                  className="px-4 py-2 rounded bg-accent hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm transition text-center font-semibold"
-                >
-                  {isGenerating ? 'Generating Install Link…' : 'Generate Install Link'}
-                </button>
-              ) : (
-                <div className="flex flex-wrap gap-3">
-                  <InstallButton manifestUrl={shortManifestUrl} />
-                  <CopyButton text={shortManifestUrl.replace(/^https?:\/\//, 'stremio://')} />
-                  <a
-                    href={`https://web.stremio.com/#/?addonOpen=${encodeURIComponent(shortManifestUrl)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-4 py-2 rounded border border-border text-zinc-300 hover:border-zinc-400 hover:text-white text-sm transition text-center"
-                  >
-                    Open in Stremio Web
-                  </a>
-                </div>
-              )}
-            </div>
-
-            {/* Config debug (collapsed) */}
-            <details className="text-xs text-zinc-600">
-              <summary className="cursor-pointer hover:text-zinc-400 transition">
-                Show raw config (debug)
-              </summary>
-              <pre className="mt-2 p-3 rounded bg-panel border border-border overflow-x-auto text-zinc-400">
-                {JSON.stringify(
-                  {
-                    addons: addonUrls, sort, display,
-                    ...(limit        > 0 ? { limit }        : {}),
-                    ...(tierTop       > 0 ? { tierTop }       : {}),
-                    ...(tierBalanced  > 0 ? { tierBalanced }  : {}),
-                    ...(tierEfficient > 0 ? { tierEfficient } : {}),
-                    ...(addonCap      > 0 ? { addonCap }      : {}),
-                    ...(debug            ? { debug }        : {}),
-                    ...(trustProxies ? { trustProxies } : {}),
-                    ...(hasActiveFilters ? { filters } : {}),
-                  },
-                  null, 2
-                )}
-              </pre>
-            </details>
-          </div>
-        )}
-        {/* Export / Import config */}
-        <div className="flex flex-wrap gap-2 items-center">
-          <span className="text-xs text-zinc-600">Config file:</span>
-          <button onClick={exportConfig}
-            className="px-3 py-1.5 rounded border border-border text-xs text-zinc-400 hover:border-zinc-400 hover:text-zinc-200 transition">
-            Export JSON
-          </button>
-          <button onClick={() => importInputRef.current?.click()}
-            className="px-3 py-1.5 rounded border border-border text-xs text-zinc-400 hover:border-zinc-400 hover:text-zinc-200 transition">
-            Import JSON
-          </button>
-          <input ref={importInputRef} type="file" accept=".json,application/json" className="hidden"
-            onChange={e => { importConfig(e.target.files?.[0]); e.target.value = ''; }} />
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="pt-4 border-t border-border text-xs text-zinc-600 flex justify-between">
-        <span>Stream Merger Aggregator</span>
-        <span>Stremio addon protocol</span>
-      </footer>
-    </div>
+    h('footer', { className: 'pt-4 border-t border-border text-xs text-zinc-600 flex justify-between' },
+      h('span', null, 'Stream Merger Aggregator'),
+      h('span', null, 'Stremio addon protocol')
+    )
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+ReactDOM.createRoot(document.getElementById('root')).render(h(App, null));
 </script>
 </body>
 </html>

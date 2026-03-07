@@ -4,7 +4,7 @@
 import {
   getCacheTier, isCachedDebrid, isEnglishAudio, hasEmbeddedSubs,
   extractResolution, extractSourceQuality, extractSeeders, extractSizeGb,
-  QUALITY_ORDER, HDR_TAGS, AUDIO_TAGS, CODEC_TAGS,
+  QUALITY_ORDER, HDR_TAGS, AUDIO_TAGS, CODEC_TAGS, getHaystack,
 } from './parse.js';
 
 export const SOURCE_QUALITY_ORDER     = ['Remux', 'BluRay', 'WEB-DL', 'WEBRip', 'HDTV', 'DVD', 'unknown'];
@@ -24,7 +24,7 @@ export const BLOAT_GB = {
 // ---------------------------------------------------------------------------
 
 function getHdrTier(stream) {
-  const haystack = `${stream.name ?? ''} ${stream.title ?? ''} ${stream.description ?? ''} ${stream.behaviorHints?.filename ?? ''}`;
+  const haystack = getHaystack(stream);
   for (let i = 0; i < HDR_TAGS.length; i++) {
     if (HDR_TAGS[i][0].test(haystack)) return i;
   }
@@ -32,7 +32,7 @@ function getHdrTier(stream) {
 }
 
 function getAudioTier(stream) {
-  const haystack = `${stream.name ?? ''} ${stream.title ?? ''} ${stream.description ?? ''} ${stream.behaviorHints?.filename ?? ''}`;
+  const haystack = getHaystack(stream);
   for (let i = 0; i < AUDIO_TAGS.length; i++) {
     if (AUDIO_TAGS[i][0].test(haystack)) return i;
   }
@@ -40,7 +40,7 @@ function getAudioTier(stream) {
 }
 
 function getCodecTier(stream) {
-  const haystack = `${stream.name ?? ''} ${stream.title ?? ''} ${stream.description ?? ''} ${stream.behaviorHints?.filename ?? ''}`;
+  const haystack = getHaystack(stream);
   for (let i = 0; i < CODEC_TAGS.length; i++) {
     if (CODEC_TAGS[i][0].test(haystack)) return i;
   }
@@ -134,11 +134,12 @@ export function sortStreams(streams, sortCriteria, type = 'movie') {
   // 1. One-pass pre-calculation to save CPU cycles during sorting
   const memoized = streams.map(s => {
     // We only attach these properties temporarily for the sort phase
+    // _res and _size must be set before isBloat() so it hits memoized values
+    s._res = extractResolution(s);
+    s._size = extractSizeGb(s);
     s._cacheTier = getCacheTier(s);
     s._isTrash = isTrash(s);
     s._isBloat = isBloat(s, type);
-    s._res = extractResolution(s);
-    s._size = extractSizeGb(s);
     s._seeders = extractSeeders(s);
     s._source = extractSourceQuality(s);
     s._isEng = isEnglishAudio(s);

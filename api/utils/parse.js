@@ -36,8 +36,10 @@ export const SOURCE_LABELS = SOURCE_TAGS.map(([, label]) => label);
 export const AUDIO_LABELS  = AUDIO_TAGS.map(([, label]) => label);
 const ALL_TAGS = [...SOURCE_TAGS, ...HDR_TAGS, ...CODEC_TAGS, ...AUDIO_TAGS];
 
-function getHaystack(stream) {
-  return `${stream.name ?? ''} ${stream.title ?? ''} ${stream.description ?? ''} ${stream.behaviorHints?.filename ?? ''}`.toLowerCase();
+export function getHaystack(stream) {
+  if (stream._haystack !== undefined) return stream._haystack;
+  stream._haystack = `${stream.name ?? ''} ${stream.title ?? ''} ${stream.description ?? ''} ${stream.behaviorHints?.filename ?? ''}`.toLowerCase();
+  return stream._haystack;
 }
 
 // --- Memoization-Aware Extractors ---
