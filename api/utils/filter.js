@@ -6,6 +6,7 @@ import {
   extractSeeders, extractSizeGb, extractBitrateMbps, isCachedDebrid, extractEpisodes,
   HDR_LABELS, CODEC_LABELS, SOURCE_LABELS, AUDIO_LABELS, QUALITY_ORDER,
 } from './parse.js';
+import { SOURCE_QUALITY_ORDER } from './sort.js';
 
 // ---------------------------------------------------------------------------
 // Filter application
@@ -194,11 +195,30 @@ export function classifyStreamTier(stream, resolution, options = {}) {
   return 'top';
 }
 
+function intraTierComparator(a, b) {
+  const srcA = SOURCE_QUALITY_ORDER.indexOf(a._source ?? 'unknown');
+  const srcB = SOURCE_QUALITY_ORDER.indexOf(b._source ?? 'unknown');
+  const srcDiff = (srcA === -1 ? SOURCE_QUALITY_ORDER.length : srcA)
+                - (srcB === -1 ? SOURCE_QUALITY_ORDER.length : srcB);
+  if (srcDiff !== 0) return srcDiff;
+
+  const hdrDiff = (a._hdrTier ?? Infinity) - (b._hdrTier ?? Infinity);
+  if (hdrDiff !== 0) return hdrDiff;
+
+  const audioDiff = (a._audioTier ?? Infinity) - (b._audioTier ?? Infinity);
+  if (audioDiff !== 0) return audioDiff;
+
+  const codecDiff = (a._codecTier ?? Infinity) - (b._codecTier ?? Infinity);
+  if (codecDiff !== 0) return codecDiff;
+
+  return (b._seeders ?? 0) - (a._seeders ?? 0);
+}
+
 export function applySmartTiering(streams, tierTop, tierBalanced, tierEfficient, options = {}) {
   if (tierTop <= 0 && tierBalanced <= 0 && tierEfficient <= 0) return streams;
 
   const runtimeMinutes = Number(options.runtimeMinutes ?? 0);
-  const keptStreams = new Set();
+  const allSelected = [];
   const groups = new Map();
 
   for (const s of streams) {
@@ -238,6 +258,10 @@ export function applySmartTiering(streams, tierTop, tierBalanced, tierEfficient,
       else efficientStreams.push(s);
     }
 
+    topStreams.sort(intraTierComparator);
+    balancedStreams.sort(intraTierComparator);
+    efficientStreams.sort(intraTierComparator);
+
     const selected = [];
 
     for (const s of topStreams) {
@@ -268,8 +292,8 @@ export function applySmartTiering(streams, tierTop, tierBalanced, tierEfficient,
     const needed = (tierTop + tierBalanced + tierEfficient) - selected.length;
     for (let i = 0; i < needed && leftovers.length > 0; i++) selected.push(leftovers.shift());
 
-    for (const s of selected) keptStreams.add(s);
+    for (const s of selected) allSelected.push(s);
   }
 
-  return streams.filter(s => keptStreams.has(s));
+  return allSelected;
 }

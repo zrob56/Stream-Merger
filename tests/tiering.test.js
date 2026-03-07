@@ -67,6 +67,17 @@ test('unknown size/runtime streams are classified unknown and backfilled', () =>
   assert.equal(selected.length, 3);
 });
 
+test('intra-tier quality sort: Remux leads over WEB-DL within the same tier', () => {
+  const runtimeMinutes = 120;
+  // Both ~22.8 Mbps -> top tier; WEB-DL listed first to confirm sort overrides arrival order
+  const webdl = { name: 'WEB-DL 1080p', title: '20 GB 1080p', _source: 'WEB-DL', _hdrTier: 3, _audioTier: 3, _codecTier: 2, _seeders: 500 };
+  const remux = { name: 'Remux 1080p',  title: '20 GB 1080p', _source: 'Remux',  _hdrTier: 3, _audioTier: 3, _codecTier: 2, _seeders: 100 };
+
+  const selected = applySmartTiering([webdl, remux], 2, 0, 0, { runtimeMinutes });
+  assert.equal(selected.length, 2);
+  assert.equal(selected[0].name, 'Remux 1080p');
+});
+
 test('top-classified streams do not consume balanced/efficient slots before those tiers are filled', () => {
   const runtimeMinutes = 120;
   const streams = [
