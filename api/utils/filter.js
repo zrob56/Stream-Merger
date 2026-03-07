@@ -56,22 +56,25 @@ export function applyFilters(streams, filters) {
 // Deduplication — two-pass: exact then fuzzy
 // ---------------------------------------------------------------------------
 
-function extractReleaseGroup(stream) {
-  const h = (stream.behaviorHints?.filename || stream.title || '').split('\n')[0];
-  const match = h.match(/-([a-zA-Z0-9]+)(?:\.[a-z0-9]{3,4})?$/i);
-  return match ? match[1].toLowerCase() : 'unknown';
-}
+const FALSE_POSITIVE_TAGS = new Set(['x264', 'x265', 'hevc', 'av1', '1080p', '2160p', 'hdr', 'web', 'dl', 'bluray', 'ray', 'hdtv', 'remux', 'repack', 'proper']);
 
 export function deduplicateStreams(streams) {
   const seen   = new Map(); // normalized key -> index in result[]
   const result = [];
 
   for (const stream of streams) {
-    const key = stream.infoHash
+    let key = stream.infoHash
       ? (stream.infoHash + (stream.fileIdx != null ? ':' + stream.fileIdx : ''))
       : (stream.url ?? null);
+    if (!key && stream.behaviorHints?.filename) {
+      key = `filename:${stream.behaviorHints.filename}`;
+    }
 
-    if (!key) { result.push(stream); continue; }
+    if (!key) {
+      const srcName = stream._addonName ?? '';
+      result.push({ ...stream, _sources: srcName ? [srcName] : [] });
+      continue;
+    }
 
     const normalized = key.toLowerCase();
     if (!seen.has(normalized)) {
@@ -88,7 +91,7 @@ export function deduplicateStreams(streams) {
   }
 
   const CODEC_LABELS_SUBSET = ['AV1', 'x265', 'x264'];
-  const fuzzyBuckets = new Map(); // key -> [{ idx, size, rls }]
+  const fuzzyBuckets = new Map(); // key → [{ idx, size }]
   const keep = new Array(result.length).fill(true);
 
   for (let i = 0; i < result.length; i++) {
@@ -99,22 +102,29 @@ export function deduplicateStreams(streams) {
     const res   = extractResolution(s);
     const src   = extractSourceQuality(s);
     const codec = extractQualityTags(s).find(t => CODEC_LABELS_SUBSET.includes(t)) ?? 'none';
-    const rls   = extractReleaseGroup(s);
-    const key   = `${res}|${src}|${codec}`;
+
+    const h = `${s.name ?? ''} ${s.title ?? ''} ${s.behaviorHints?.filename ?? ''}`.toLowerCase();
+    const extMatch = h.match(/\.(mkv|mp4|avi|ts|m4v)\b/);
+    const ext = extMatch ? extMatch[1] : 'any';
+
+    // Prefer tag directly before extension (e.g. -TGx.mkv); fall back to end-of-token.
+    const tagMatch = h.match(/-([a-z0-9]{2,12})\.(?:mkv|mp4|avi|ts|m4v)\b/)
+      ?? h.match(/-([a-z0-9]{2,12})(?:\s|$|\n|\]|\))/);
+    const rawTag = tagMatch ? tagMatch[1] : 'any';
+    const tag = FALSE_POSITIVE_TAGS.has(rawTag) ? 'any' : rawTag;
+
+    const key = `${res}|${src}|${codec}|${ext}|${tag}`;
 
     if (!fuzzyBuckets.has(key)) {
-      fuzzyBuckets.set(key, [{ idx: i, size: sizeA, rls }]);
+      fuzzyBuckets.set(key, [{ idx: i, size: sizeA }]);
       continue;
     }
 
     const candidates = fuzzyBuckets.get(key);
     let merged = false;
     for (const cand of candidates) {
-      // Same release group gets a wider tolerance because file metadata often differs slightly.
-      const isSameGroup = rls !== 'unknown' && cand.rls !== 'unknown' && rls === cand.rls;
-      const tolerance = isSameGroup ? 0.5 : 0.05;
-
-      if (Math.abs(cand.size - sizeA) <= tolerance) {
+      const margin = tag !== 'any' ? 0.5 : 0.05;
+      if (Math.abs(cand.size - sizeA) <= margin) {
         const dupSrc = s._addonName ?? '';
         if (dupSrc && !result[cand.idx]._sources.includes(dupSrc)) {
           result[cand.idx]._sources.push(dupSrc);
@@ -124,7 +134,7 @@ export function deduplicateStreams(streams) {
         break;
       }
     }
-    if (!merged) candidates.push({ idx: i, size: sizeA, rls });
+    if (!merged) candidates.push({ idx: i, size: sizeA });
   }
 
   return result.filter((_, i) => keep[i]);

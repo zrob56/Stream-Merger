@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { isEarlyExitSatisfied, orderAddonsByBreakerState } from '../api/stream.js';
+import { deduplicateStreams } from '../api/utils/filter.js';
 
 test('early-exit exits exactly at target (margin=0)', () => {
   // Exact match satisfies.
@@ -30,4 +31,33 @@ test('circuit-breaker ordering deprioritizes unstable addons but keeps all', () 
     'https://b.test/manifest.json',
   ]);
   assert.equal(ordered.length, addons.length);
+});
+
+test('fuzzy dedup: same release tag (-tgx), size diff 0.08 GB → deduped to 1', () => {
+  const streams = [
+    { name: '1080p WEB-DL', title: 'Movie.1080p.WEB-DL-TGx.mkv', _addonName: 'Torrentio', _size: 10.00 },
+    { name: '1080p WEB-DL', title: 'Movie.1080p.WEB-DL-TGx.mkv', _addonName: 'Comet',     _size: 10.08 },
+  ];
+  const result = deduplicateStreams(streams);
+  assert.equal(result.length, 1);
+  assert.ok(result[0]._sources.includes('Comet'));
+});
+
+test('fuzzy dedup: no release tag, size diff 0.08 GB → kept separate', () => {
+  const streams = [
+    { name: '1080p WEB-DL', title: 'Movie.1080p.WEB-DL.mkv', _addonName: 'AddonA', _size: 10.00 },
+    { name: '1080p WEB-DL', title: 'Movie.1080p.WEB-DL.mkv', _addonName: 'AddonB', _size: 10.08 },
+  ];
+  const result = deduplicateStreams(streams);
+  assert.equal(result.length, 2);
+});
+
+test('pass 1 dedup: same behaviorHints.filename, no infoHash/url → deduped to 1', () => {
+  const streams = [
+    { behaviorHints: { filename: 'Movie.1080p.WEB-DL-TGx.mkv' }, _addonName: 'StremThru' },
+    { behaviorHints: { filename: 'Movie.1080p.WEB-DL-TGx.mkv' }, _addonName: 'Proxy' },
+  ];
+  const result = deduplicateStreams(streams);
+  assert.equal(result.length, 1);
+  assert.ok(result[0]._sources.includes('Proxy'));
 });
