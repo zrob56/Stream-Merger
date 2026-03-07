@@ -51,7 +51,9 @@ export function formatStreamDisplay(streams, display) {
 
     if (show.has('source')) {
       const src = stream._sources?.length
-        ? stream._sources.join(' + ')
+        ? (stream._sources.length > 2
+            ? `${stream._sources[0]} +${stream._sources.length - 1}`
+            : stream._sources.join(' + '))
         : (stream._addonName || 'Unknown');
       nameParts.push(src);
     }

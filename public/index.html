@@ -640,10 +640,10 @@ function FiltersSection({ filters, setFilters, limit, setLimit, tierTop, setTier
   const removeTerm = (t) => setFilters(f => ({ ...f, excludeTerms: f.excludeTerms.filter(x => x !== t) }));
 
   return h('div', { className: 'space-y-1' },
-    h('label', { className: 'flex items-start gap-3 p-2.5 rounded border border-emerald-900 bg-emerald-900/10 cursor-pointer hover:border-emerald-500/50 transition select-none' },
-      h('input', { type: 'checkbox', checked: trustProxies, onChange: e => setTrustProxies(e.target.checked), className: 'w-4 h-4 shrink-0 accent-emerald-500 mt-0.5' }),
+    h('label', { className: 'flex items-start gap-3 p-2.5 rounded border border-amber-900 bg-amber-900/10 cursor-pointer hover:border-amber-500/50 transition select-none' },
+      h('input', { type: 'checkbox', checked: trustProxies, onChange: e => setTrustProxies(e.target.checked), className: 'w-4 h-4 shrink-0 accent-amber-500 mt-0.5' }),
       h('div', { className: 'flex-1 min-w-0' },
-        h('p', { className: 'text-sm font-bold text-emerald-400' }, 'Trust addon caches (Bypass Proxy Trap)'),
+        h('p', { className: 'text-sm font-bold text-amber-400' }, 'Trust addon caches (Bypass Proxy Trap)'),
         h('p', { className: 'text-xs text-zinc-400 mt-1' }, 'Enable ONLY if your proxy addons are explicitly set to "Cached Only".')
       )
     ),
@@ -1223,7 +1223,7 @@ function App() {
     h('section', { className: 'space-y-3' },
       h('div', { className: 'flex items-center justify-between' },
         h('h2', { className: 'text-xs font-semibold uppercase tracking-widest text-zinc-500' },
-          '3.5 · Filters & limits',
+          '4 · Filters & limits',
           h('span', { className: 'ml-2 font-normal normal-case text-zinc-600' }, '(optional — all off by default)')
         ),
         h('button', { onClick: () => setFilters(DEFAULT_FILTERS), className: 'text-xs px-2 py-0.5 rounded border border-zinc-700 text-zinc-500 hover:border-red-500/50 hover:text-red-400 transition' }, 'Reset filters')
@@ -1242,7 +1242,7 @@ function App() {
 
     h('section', { className: 'space-y-3' },
       h('div', { className: 'flex items-center justify-between' },
-        h('h2', { className: 'text-xs font-semibold uppercase tracking-widest text-zinc-500' }, '4 · Install'),
+        h('h2', { className: 'text-xs font-semibold uppercase tracking-widest text-zinc-500' }, '5 · Install'),
         h('button', { onClick: () => { if (window.confirm('Reset all addons and settings to defaults?')) resetToDefaults(); }, className: 'text-xs px-2 py-1 rounded border border-zinc-700 text-zinc-500 hover:border-red-500/50 hover:text-red-400 transition' }, '↺ Reset all')
       ),
       !isReady && h('p', { className: 'text-sm text-zinc-500' }, 'Add at least one addon above to generate your link.'),

@@ -127,7 +127,7 @@ export function deduplicateStreams(streams) {
     const candidates = fuzzyBuckets.get(key);
     let merged = false;
     for (const cand of candidates) {
-      const margin = tag !== 'any' ? 0.5 : 0.05;
+      const margin = tag !== 'any' ? 0.5 : Math.max(0.02, sizeA * 0.05);
       if (Math.abs(cand.size - sizeA) <= margin) {
         const dupSrc = s._addonName ?? '';
         if (dupSrc && !result[cand.idx]._sources.includes(dupSrc)) {
