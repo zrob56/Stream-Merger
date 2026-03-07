@@ -72,10 +72,10 @@ async function getRedis() {
 // Addon name identification — scans manifest URL + video URL + stream name
 // ---------------------------------------------------------------------------
 
-// Addons that proxy debrid links and require the real client IP to maintain
-// session continuity (e.g. Real-Debrid IP lock). Public indexers like Torrentio
-// do NOT need this — sending X-Forwarded-For to them can trigger WAF blocks.
-const SESSION_SENSITIVE_HOSTS = ['sootio', 'stremthru', 'debridmediamanager', 'torrentsdb'];
+// Addons that need the real client IP forwarded — either for debrid session
+// continuity (Real-Debrid IP lock) or to avoid Vercel's shared egress IP being
+// rate-limited / WAF-blocked by the upstream (e.g. Torrentio blocks cloud IPs).
+const SESSION_SENSITIVE_HOSTS = ['sootio', 'stremthru', 'debridmediamanager', 'torrentsdb', 'torrentio'];
 function needsIpForwarding(manifestUrl) {
   const h = (manifestUrl ?? '').toLowerCase();
   return SESSION_SENSITIVE_HOSTS.some(s => h.includes(s));

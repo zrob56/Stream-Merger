@@ -89,14 +89,14 @@ export function formatStreamDisplay(streams, display) {
       const s = extractSeeders(stream);
       if (s > 0) bottomLine.push(`👤 ${s}`);
     }
-   if (show.has('size')) {
+    if (show.has('size')) {
       const gb = extractSizeGb(stream);
       if (gb > 0) {
         const sizeStr = gb < 1 ? `${Math.round(gb * 1024)} MB` : `${gb.toFixed(2)} GB`;
-        const subsFlag = show.has('subs') && hasHardcodedSubs(stream) ? ' 💬' : '';
-        bottomLine.push(`💾 ${sizeStr}${subsFlag}`);
+        bottomLine.push(`💾 ${sizeStr}`);
       }
     }
+    if (show.has('subs') && hasHardcodedSubs(stream)) bottomLine.push('💬');
     if (bottomLine.length) titleParts.push(bottomLine.join('   '));
 
     return {
