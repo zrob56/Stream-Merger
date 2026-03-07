@@ -105,8 +105,16 @@ export function extractSizeGb(stream) {
 
   // 2. Fallback to text parsing if native sizes aren't provided
   const h = getHaystack(stream);
-  const matchGb = h.match(/([\d.]+)\s*gb/); if (matchGb) return parseFloat(matchGb[1]);
-  const matchMb = h.match(/([\d.]+)\s*mb/); if (matchMb) return parseFloat(matchMb[1]) / 1024;
+  const matchGb = h.match(/([\d.]+)\s*gb/);
+  if (matchGb) {
+    const v = parseFloat(matchGb[1]);
+    if (v > 0 && v <= 500) return v;
+    // Sootio writes the raw byte count with a "gb" suffix — detect and convert
+    const asBytesGb = v / (1024 * 1024 * 1024);
+    if (asBytesGb > 0 && asBytesGb <= 500) return asBytesGb;
+  }
+  const matchMb = h.match(/([\d.]+)\s*mb/);
+  if (matchMb) { const v = parseFloat(matchMb[1]) / 1024; if (v > 0 && v <= 500) return v; }
   return 0;
 }
 
