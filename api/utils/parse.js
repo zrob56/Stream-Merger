@@ -95,26 +95,62 @@ export function extractEpisodes(stream) {
 
 export function extractSizeGb(stream) {
   if (stream._size !== undefined) return stream._size;
-  
-  // 1. Check for native byte sizes first (behaviorHints.videoSize is the only spec-defined byte field)
-  const rawBytes = stream.behaviorHints?.videoSize;
-  if (typeof rawBytes === 'number' && rawBytes > 0) {
-    const gb = rawBytes / (1024 * 1024 * 1024);
-    if (gb <= 500) return gb; // sanity cap — anything larger is a bad value, fall through
+
+  const GIB = 1024 * 1024 * 1024;
+  const MAX_GB = 500;
+  const NUM_RE = '(\\d{1,3}(?:,\\d{3})+|\\d+(?:\\.\\d+)?)';
+
+  function parseLooseNumber(v) {
+    if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+    if (typeof v !== 'string') return 0;
+    const normalized = v.trim().replace(/,/g, '');
+    if (!normalized || !/^\d+(?:\.\d+)?$/.test(normalized)) return 0;
+    const n = parseFloat(normalized);
+    return Number.isFinite(n) ? n : 0;
   }
 
-  // 2. Fallback to text parsing if native sizes aren't provided
-  const h = getHaystack(stream);
-  const matchGb = h.match(/([\d.]+)\s*gb/);
-  if (matchGb) {
-    const v = parseFloat(matchGb[1]);
-    if (v > 0 && v <= 500) return v;
-    // Sootio writes the raw byte count with a "gb" suffix — detect and convert
-    const asBytesGb = v / (1024 * 1024 * 1024);
-    if (asBytesGb > 0 && asBytesGb <= 500) return asBytesGb;
+  function bytesToGb(bytes) {
+    if (!(bytes > 0)) return 0;
+    const gb = bytes / GIB;
+    return gb > 0 && gb <= MAX_GB ? gb : 0;
   }
-  const matchMb = h.match(/([\d.]+)\s*mb/);
-  if (matchMb) { const v = parseFloat(matchMb[1]) / 1024; if (v > 0 && v <= 500) return v; }
+
+  // 1. Check for native byte sizes first (behaviorHints.videoSize is spec-defined bytes).
+  const rawBytes = parseLooseNumber(stream.behaviorHints?.videoSize);
+  const fromNativeBytes = bytesToGb(rawBytes);
+  if (fromNativeBytes > 0) return fromNativeBytes;
+
+  // 2. Fallback to text parsing if native sizes aren't provided.
+  const h = getHaystack(stream);
+
+  const matchBytes = h.match(new RegExp(`${NUM_RE}\\s*bytes?\\b`, 'i'));
+  if (matchBytes) {
+    const fromBytesText = bytesToGb(parseLooseNumber(matchBytes[1]));
+    if (fromBytesText > 0) return fromBytesText;
+  }
+
+  const matchGb = h.match(new RegExp(`${NUM_RE}\\s*(?:gib|gb)\\b`, 'i'));
+  if (matchGb) {
+    const v = parseLooseNumber(matchGb[1]);
+    if (v > 0 && v <= MAX_GB) return v;
+    // Some addons mislabel raw bytes with a "gb" suffix.
+    const asBytesGb = bytesToGb(v);
+    if (asBytesGb > 0) return asBytesGb;
+  }
+
+  const matchMb = h.match(new RegExp(`${NUM_RE}\\s*(?:mib|mb)\\b`, 'i'));
+  if (matchMb) {
+    const v = parseLooseNumber(matchMb[1]) / 1024;
+    if (v > 0 && v <= MAX_GB) return v;
+  }
+
+  // Plain large numeric tokens without a unit are often raw bytes.
+  const matchPlainBytes = h.match(/\b(\d{7,}(?:,\d{3})*)\b/);
+  if (matchPlainBytes) {
+    const fromPlainBytes = bytesToGb(parseLooseNumber(matchPlainBytes[1]));
+    if (fromPlainBytes > 0) return fromPlainBytes;
+  }
+
   return 0;
 }
 
@@ -171,8 +207,14 @@ export function getCacheTier(stream) {
 
 export function isCachedDebrid(stream) { return getCacheTier(stream) === 'cached'; }
 export function isEnglishAudio(stream) { return /\b(english|eng)\b/.test(getHaystack(stream)); }
-export function hasEmbeddedSubs(stream)  { return /\b(hardsub|hardcoded|hsub|esub|engsubs?|subbed|subs?|subtitles?|multisub|bdsubs?|dualsub)\b/i.test(getHaystack(stream)); }
-export function hasHardcodedSubs(stream) { return /\b(hardsub|hardcoded|hsub|esub|engsubs?|subbed|subs?|subtitles?|multisub|bdsubs?|dualsub)\b/i.test(getHaystack(stream)); }
+export function hasEmbeddedSubs(stream)  {
+  const h = getHaystack(stream);
+  return /\.mkv\b/.test(h) || /\b(hardsub|hardcoded|hsub|esub|engsubs?|subbed|subs?|subtitles?|multisub|bdsubs?|dualsub)\b/i.test(h);
+}
+export function hasHardcodedSubs(stream) {
+  const h = getHaystack(stream);
+  return /\.mkv\b/.test(h) || /\b(hardsub|hardcoded|hsub|esub|engsubs?|subbed|subs?|subtitles?|multisub|bdsubs?|dualsub)\b/i.test(h);
+}
 
 export function parseConfig(raw) {
   try {
@@ -255,3 +297,4 @@ export function fetchWithTimeout(url, timeoutMs = FETCH_TIMEOUT_MS, clientIp = n
     })
     .finally(() => clearTimeout(timer));
 }
+
