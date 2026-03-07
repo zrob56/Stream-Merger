@@ -94,11 +94,11 @@ export function extractEpisodes(stream) {
 export function extractSizeGb(stream) {
   if (stream._size !== undefined) return stream._size;
   
-  // 1. Check for native byte sizes first (most accurate)
-  const rawBytes = stream.behaviorHints?.videoSize ?? stream.size;
+  // 1. Check for native byte sizes first (behaviorHints.videoSize is the only spec-defined byte field)
+  const rawBytes = stream.behaviorHints?.videoSize;
   if (typeof rawBytes === 'number' && rawBytes > 0) {
-    // Convert bytes to GB
-    return rawBytes / (1024 * 1024 * 1024);
+    const gb = rawBytes / (1024 * 1024 * 1024);
+    if (gb <= 500) return gb; // sanity cap — anything larger is a bad value, fall through
   }
 
   // 2. Fallback to text parsing if native sizes aren't provided
