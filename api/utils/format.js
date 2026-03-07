@@ -93,7 +93,7 @@ export function formatStreamDisplay(streams, display) {
       const gb = extractSizeGb(stream);
       if (gb > 0) {
         const sizeStr = gb < 1 ? `${Math.round(gb * 1024)} MB` : `${gb.toFixed(2)} GB`;
-        const subsFlag = hasHardcodedSubs(stream) ? ' 💬' : '';
+        const subsFlag = show.has('subs') && hasHardcodedSubs(stream) ? ' 💬' : '';
         bottomLine.push(`💾 ${sizeStr}${subsFlag}`);
       }
     }

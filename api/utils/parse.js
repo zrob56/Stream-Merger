@@ -3,7 +3,7 @@
 
 export const FETCH_TIMEOUT_MS = 4500;
 
-export const DISPLAY_DEFAULTS = ['source', 'resolution', 'cached', 'tags', 'filename', 'seeders', 'size'];
+export const DISPLAY_DEFAULTS = ['source', 'resolution', 'cached', 'tags', 'filename', 'seeders', 'size', 'subs'];
 
 export const RESOLUTION_TAGS = ['4k', '2160p', '1080p', '720p', '480p', '360p'];
 export const VALID_MIN_RES   = new Set(['4k', '2160p', '1080p', '720p', '480p', '360p']);

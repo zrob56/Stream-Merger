@@ -62,8 +62,9 @@ const DISPLAY_OPTIONS = [
   { value: 'filename',   label: 'Filename',     desc: 'Release name from torrent title' },
   { value: 'seeders',    label: 'Seeders 👤',   desc: 'P2P health count' },
   { value: 'size',       label: 'File size 💾', desc: 'File size in GB' },
+  { value: 'subs',       label: 'Subtitles 💬', desc: 'Hardcoded/encoded subtitle indicator' },
 ];
-const DEFAULT_DISPLAY = ['source', 'resolution', 'cached', 'tags', 'filename', 'seeders', 'size'];
+const DEFAULT_DISPLAY = ['source', 'resolution', 'cached', 'tags', 'filename', 'seeders', 'size', 'subs'];
 
 const DEFAULT_FILTERS = { cachedOnly: false, minSeeders: 0, maxSizeGb: 0, minResolution: '', excludeTerms: [], requiredHdr: [], requiredCodec: [], requiredSource: [], requiredAudio: [] };
 

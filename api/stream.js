@@ -72,6 +72,15 @@ async function getRedis() {
 // Addon name identification — scans manifest URL + video URL + stream name
 // ---------------------------------------------------------------------------
 
+// Addons that proxy debrid links and require the real client IP to maintain
+// session continuity (e.g. Real-Debrid IP lock). Public indexers like Torrentio
+// do NOT need this — sending X-Forwarded-For to them can trigger WAF blocks.
+const SESSION_SENSITIVE_HOSTS = ['sootio', 'stremthru', 'debridmediamanager', 'torrentsdb'];
+function needsIpForwarding(manifestUrl) {
+  const h = (manifestUrl ?? '').toLowerCase();
+  return SESSION_SENSITIVE_HOSTS.some(s => h.includes(s));
+}
+
 function identifyAddonName(stream, manifestUrl) {
   const haystack = `${manifestUrl ?? ''} ${stream.url ?? ''} ${stream.name ?? ''}`.toLowerCase();
 
@@ -303,7 +312,8 @@ export default async function handler(req, res) {
     const streamUrl = buildStreamUrl(manifestUrl, type, stremioId);
     const timeout = addonTimeouts[manifestUrl] ?? FETCH_TIMEOUT_MS;
 
-    return fetchWithTimeout(streamUrl, timeout, clientIp, abortController.signal)
+    const forwardIp = needsIpForwarding(manifestUrl) ? clientIp : null;
+    return fetchWithTimeout(streamUrl, timeout, forwardIp, abortController.signal)
       .then(result => {
         const rawStreams = result?.streams;
         if (Array.isArray(rawStreams) && rawStreams.length > 0) {
