@@ -3,7 +3,7 @@
 
 import {
   extractResolution, formatTagsWithIcons, getCacheTier, isCachedDebrid,
-  extractSeeders, extractSizeGb, RESOLUTION_ICONS,
+  extractSeeders, extractSizeGb, RESOLUTION_ICONS, hasHardcodedSubs,
 } from './parse.js';
 
 // ---------------------------------------------------------------------------
@@ -93,7 +93,8 @@ export function formatStreamDisplay(streams, display) {
       const gb = extractSizeGb(stream);
       if (gb > 0) {
         const sizeStr = gb < 1 ? `${Math.round(gb * 1024)} MB` : `${gb.toFixed(2)} GB`;
-        bottomLine.push(`💾 ${sizeStr}`);
+        const subsFlag = hasHardcodedSubs(stream) ? ' 💬' : '';
+        bottomLine.push(`💾 ${sizeStr}${subsFlag}`);
       }
     }
     if (bottomLine.length) titleParts.push(bottomLine.join('   '));

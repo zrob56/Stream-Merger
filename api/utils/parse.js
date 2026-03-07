@@ -172,6 +172,7 @@ export function getCacheTier(stream) {
 export function isCachedDebrid(stream) { return getCacheTier(stream) === 'cached'; }
 export function isEnglishAudio(stream) { return /\b(english|eng)\b/.test(getHaystack(stream)); }
 export function hasEmbeddedSubs(stream) { return /\b(subs?|subtitles?|hardcoded|esub)\b/.test(getHaystack(stream)); }
+export function hasHardcodedSubs(stream) { return /\b(hardsub|hardcoded|hsub|esub|engsub|subbed)\b/i.test(getHaystack(stream)); }
 
 export function parseConfig(raw) {
   try {
