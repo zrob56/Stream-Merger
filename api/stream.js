@@ -77,9 +77,29 @@ async function getRedis() {
 // (e.g. Real-Debrid IP lock). Torrentio is excluded — it blocks Vercel IPs at
 // the TCP level and does not honour X-Forwarded-For.
 const SESSION_SENSITIVE_HOSTS = ['sootio', 'stremthru', 'debridmediamanager', 'torrentsdb'];
-function needsIpForwarding(manifestUrl) {
+export function needsIpForwarding(manifestUrl) {
   const h = (manifestUrl ?? '').toLowerCase();
   return SESSION_SENSITIVE_HOSTS.some(s => h.includes(s));
+}
+
+function addonUrl(addon) {
+  if (typeof addon === 'string') return addon;
+  if (addon && typeof addon.url === 'string') return addon.url;
+  return '';
+}
+
+function coerceTtl(v) {
+  if (Array.isArray(v)) {
+    if (v.length === 2) return coerceTtl(v[1]);
+    if (v.length > 0) return coerceTtl(v[0]);
+    return 0;
+  }
+  if (v && typeof v === 'object') {
+    if ('result' in v) return coerceTtl(v.result);
+    if ('data' in v) return coerceTtl(v.data);
+  }
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
 function identifyAddonName(stream, manifestUrl) {
@@ -189,11 +209,32 @@ async function fetchRuntimeMinutes(type, imdbId) {
   return minutes;
 }
 
-async function getAddonBreakerState(redis, addons) {
+export async function getAddonBreakerState(redis, addons) {
   const state = {};
   if (!redis) return state;
 
-  await Promise.all(addons.map(async (manifestUrl) => {
+  const entries = addons
+    .map(a => addonUrl(a))
+    .filter(Boolean);
+
+  if (typeof redis.pipeline === 'function') {
+    try {
+      const pipe = redis.pipeline();
+      for (const manifestUrl of entries) {
+        const id = addonBreakerId(manifestUrl);
+        pipe.ttl(`cb:cool:${id}`);
+      }
+      const responses = await pipe.exec();
+      for (let i = 0; i < entries.length; i++) {
+        state[entries[i]] = coerceTtl(responses?.[i]);
+      }
+      return state;
+    } catch {
+      // fallback below
+    }
+  }
+
+  await Promise.all(entries.map(async (manifestUrl) => {
     try {
       const id = addonBreakerId(manifestUrl);
       const ttl = await redis.ttl(`cb:cool:${id}`);
@@ -203,6 +244,13 @@ async function getAddonBreakerState(redis, addons) {
     }
   }));
   return state;
+}
+
+export function buildWarmupHeaders(clientIp, addons = []) {
+  if (!clientIp) return {};
+  const shouldForward = addons.some(a => needsIpForwarding(addonUrl(a)));
+  if (!shouldForward) return {};
+  return { 'X-Forwarded-For': clientIp, 'X-Real-IP': clientIp };
 }
 
 async function recordAddonFailure(redis, manifestUrl) {
@@ -569,8 +617,7 @@ export default async function handler(req, res) {
     
     // Fire and forget (don't await it). Forward the user's IP so Sootio/Real-Debrid
     // don't see a different IP and flag the session.
-    const warmupHeaders = {};
-    if (clientIp) { warmupHeaders['X-Forwarded-For'] = clientIp; warmupHeaders['X-Real-IP'] = clientIp; }
+    const warmupHeaders = buildWarmupHeaders(clientIp, addons);
     const warmupPromise = fetch(warmupUrl, { headers: warmupHeaders }).catch(() => {});
     waitUntil(warmupPromise);
   }

@@ -144,11 +144,15 @@ export function extractSizeGb(stream) {
     if (v > 0 && v <= MAX_GB) return v;
   }
 
-  // Plain large numeric tokens without a unit are often raw bytes.
-  const matchPlainBytes = h.match(/\b(\d{7,}(?:,\d{3})*)\b/);
-  if (matchPlainBytes) {
-    const fromPlainBytes = bytesToGb(parseLooseNumber(matchPlainBytes[1]));
-    if (fromPlainBytes > 0) return fromPlainBytes;
+  // Plain large numeric tokens without a unit are often raw bytes, but only
+  // trust them when size context words are present.
+  const hasSizeContext = /\b(size|video\s*size|filesize|file\s*size|bytes?)\b/i.test(h);
+  if (hasSizeContext) {
+    const matchPlainBytes = h.match(/\b(\d{7,}(?:,\d{3})*)\b/);
+    if (matchPlainBytes) {
+      const fromPlainBytes = bytesToGb(parseLooseNumber(matchPlainBytes[1]));
+      if (fromPlainBytes > 0) return fromPlainBytes;
+    }
   }
 
   return 0;
@@ -207,9 +211,16 @@ export function getCacheTier(stream) {
 
 export function isCachedDebrid(stream) { return getCacheTier(stream) === 'cached'; }
 export function isEnglishAudio(stream) { return /\b(english|eng)\b/.test(getHaystack(stream)); }
-export function hasEmbeddedSubs(stream)  {
+export function hasLikelySubs(stream) {
   const h = getHaystack(stream);
-  return /\.mkv\b/.test(h) || /\b(hardsub|hardcoded|hsub|esub|engsubs?|subbed|subs?|subtitles?|multisub|bdsubs?|dualsub)\b/i.test(h);
+  return /\.mkv\b/.test(h);
+}
+export function hasConfirmedSubs(stream) {
+  const h = getHaystack(stream);
+  return /\b(hardsub|hardcoded|hsub|esub|subbed|subtitles?|multisub|bdsubs?|dualsub|(?:multi|dual)[- ]?sub(?:s|bed)?|(?:eng|english|en|spa|spanish|es|fr|french|ara|arabic|jpn|jp|japanese)[-_. ]?sub(?:s|titles?)?)\b/i.test(h);
+}
+export function hasEmbeddedSubs(stream)  {
+  return hasLikelySubs(stream) || hasConfirmedSubs(stream);
 }
 
 export function parseConfig(raw) {
@@ -277,10 +288,16 @@ export function buildStreamUrl(manifestUrl, type, id) {
 export function fetchWithTimeout(url, timeoutMs = FETCH_TIMEOUT_MS, clientIp = null, externalSignal = null) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let externalAbortHandler = null;
 
   // If the global early bailout triggers, abort this specific fetch too
   if (externalSignal) {
-    externalSignal.addEventListener('abort', () => controller.abort());
+    if (externalSignal.aborted) {
+      controller.abort();
+    } else {
+      externalAbortHandler = () => controller.abort();
+      externalSignal.addEventListener('abort', externalAbortHandler, { once: true });
+    }
   }
 
   const headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Stremio/4.4.168' };
@@ -291,6 +308,11 @@ export function fetchWithTimeout(url, timeoutMs = FETCH_TIMEOUT_MS, clientIp = n
       if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
       return res.json();
     })
-    .finally(() => clearTimeout(timer));
+    .finally(() => {
+      clearTimeout(timer);
+      if (externalSignal && externalAbortHandler) {
+        externalSignal.removeEventListener('abort', externalAbortHandler);
+      }
+    });
 }
 

@@ -26,6 +26,7 @@ test('extractSizeGb parses GiB/MiB and preserves GB/MB behavior', () => {
 
 test('extractSizeGb treats plain large numbers as raw bytes', () => {
   approx(extractSizeGb({ title: 'release size 2147483648' }), 2);
+  assert.equal(extractSizeGb({ title: 'imdb id 2147483648' }), 0);
   assert.equal(extractSizeGb({ title: 'episode 101' }), 0);
 });
 

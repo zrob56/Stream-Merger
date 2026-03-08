@@ -3,7 +3,7 @@
 
 import {
   extractResolution, formatTagsWithIcons, getCacheTier, isCachedDebrid,
-  extractSeeders, extractSizeGb, RESOLUTION_ICONS, hasEmbeddedSubs,
+  extractSeeders, extractSizeGb, RESOLUTION_ICONS, hasLikelySubs, hasConfirmedSubs,
 } from './parse.js';
 
 // ---------------------------------------------------------------------------
@@ -96,7 +96,10 @@ export function formatStreamDisplay(streams, display) {
         bottomLine.push(`💾 ${sizeStr}`);
       }
     }
-    if (show.has('subs') && hasEmbeddedSubs(stream)) bottomLine.push('💬');
+    if (show.has('subs')) {
+      if (hasConfirmedSubs(stream)) bottomLine.push('\u{1F4AC}');
+      else if (hasLikelySubs(stream)) bottomLine.push('\u{1F5E3}\uFE0F');
+    }
     if (bottomLine.length) titleParts.push(bottomLine.join('   '));
 
     return {
@@ -127,3 +130,4 @@ export function sanitizeStream({ _addonIdx, _addonUrl, _addonName, _sources, des
   }
   return s;
 }
+
