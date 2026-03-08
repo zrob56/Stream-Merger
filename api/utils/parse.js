@@ -1,7 +1,7 @@
 // api/utils/parse.js
 // Shared constants, tag extractors, signal detectors, and request helpers.
 
-export const FETCH_TIMEOUT_MS = 4500;
+export const FETCH_TIMEOUT_MS = 3000;
 
 export const DISPLAY_DEFAULTS = ['source', 'resolution', 'cached', 'tags', 'filename', 'seeders', 'size', 'subs'];
 
@@ -263,7 +263,23 @@ export function parseConfig(raw) {
       ? Object.fromEntries(Object.entries(parsed.addonTimeouts).filter(([k, v]) => typeof k === 'string' && typeof v === 'number' && v > 0).map(([k, v]) => [k, Math.min(60000, Math.max(1000, Math.round(v)))]))
       : {};
 
-    return { addons: Array.isArray(parsed.addons) ? parsed.addons : [], sort, display, limit, tierTop, tierBalanced, tierEfficient, addonCap, debug, trustProxies, filters, addonTimeouts };
+    const addons = Array.isArray(parsed.addons)
+      ? parsed.addons
+          .map((entry) => {
+            if (typeof entry === 'string') {
+              const url = entry.trim();
+              return url ? { url } : null;
+            }
+            if (entry && typeof entry.url === 'string') {
+              const url = entry.url.trim();
+              return url ? { ...entry, url } : null;
+            }
+            return null;
+          })
+          .filter(Boolean)
+      : [];
+
+    return { addons, sort, display, limit, tierTop, tierBalanced, tierEfficient, addonCap, debug, trustProxies, filters, addonTimeouts };
   } catch {
     return {
       addons: [], sort: ['cached', 'resolution', 'seeders', 'size'], display: DISPLAY_DEFAULTS.slice(),
@@ -275,8 +291,23 @@ export function parseConfig(raw) {
 }
 
 export function parseId(id) {
-  const parts = id.split(':');
-  return { imdbId: parts[0], season: parts[1] ?? null, episode: parts[2] ?? null };
+  const parts = String(id ?? '').split(':');
+  if (parts.length < 3) {
+    return { imdbId: String(id ?? ''), season: null, episode: null };
+  }
+
+  const tailEpisode = parts[parts.length - 1];
+  const tailSeason = parts[parts.length - 2];
+
+  if (/^\d+$/.test(tailSeason) && /^\d+$/.test(tailEpisode)) {
+    return {
+      imdbId: parts.slice(0, -2).join(':'),
+      season: tailSeason,
+      episode: tailEpisode,
+    };
+  }
+
+  return { imdbId: String(id ?? ''), season: null, episode: null };
 }
 
 export function buildStreamUrl(manifestUrl, type, id) {
