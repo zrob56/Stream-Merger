@@ -183,7 +183,9 @@ async function fetchRuntimeMinutes(type, imdbId) {
     clearTimeout(timer);
   }
 
-  runtimeCache.set(cacheKey, { minutes, expiresAt: now + RUNTIME_CACHE_TTL_MS });
+  if (minutes > 0) {
+    runtimeCache.set(cacheKey, { minutes, expiresAt: now + RUNTIME_CACHE_TTL_MS });
+  }
   return minutes;
 }
 

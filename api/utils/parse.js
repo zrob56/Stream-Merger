@@ -211,10 +211,6 @@ export function hasEmbeddedSubs(stream)  {
   const h = getHaystack(stream);
   return /\.mkv\b/.test(h) || /\b(hardsub|hardcoded|hsub|esub|engsubs?|subbed|subs?|subtitles?|multisub|bdsubs?|dualsub)\b/i.test(h);
 }
-export function hasHardcodedSubs(stream) {
-  const h = getHaystack(stream);
-  return /\.mkv\b/.test(h) || /\b(hardsub|hardcoded|hsub|esub|engsubs?|subbed|subs?|subtitles?|multisub|bdsubs?|dualsub)\b/i.test(h);
-}
 
 export function parseConfig(raw) {
   try {
