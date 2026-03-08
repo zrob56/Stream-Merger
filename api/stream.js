@@ -3,6 +3,7 @@
 // sorts, filters, and normalizes bingeGroup for seamless Stremio autoplay.
 
 import { createHash } from 'crypto';
+import { waitUntil } from '@vercel/functions';
 import {
   parseConfig, parseId, buildStreamUrl, fetchWithTimeout,
   isCachedDebrid, extractSeeders, extractSizeGb, extractResolution, extractEpisodes,
@@ -72,10 +73,10 @@ async function getRedis() {
 // Addon name identification — scans manifest URL + video URL + stream name
 // ---------------------------------------------------------------------------
 
-// Addons that need the real client IP forwarded — either for debrid session
-// continuity (Real-Debrid IP lock) or to avoid Vercel's shared egress IP being
-// rate-limited / WAF-blocked by the upstream (e.g. Torrentio blocks cloud IPs).
-const SESSION_SENSITIVE_HOSTS = ['sootio', 'stremthru', 'debridmediamanager', 'torrentsdb', 'torrentio'];
+// Addons that need the real client IP forwarded for debrid session continuity
+// (e.g. Real-Debrid IP lock). Torrentio is excluded — it blocks Vercel IPs at
+// the TCP level and does not honour X-Forwarded-For.
+const SESSION_SENSITIVE_HOSTS = ['sootio', 'stremthru', 'debridmediamanager', 'torrentsdb'];
 function needsIpForwarding(manifestUrl) {
   const h = (manifestUrl ?? '').toLowerCase();
   return SESSION_SENSITIVE_HOSTS.some(s => h.includes(s));
@@ -387,7 +388,11 @@ export default async function handler(req, res) {
         }
         return { ...result, _addonUrl: manifestUrl };
       })
-      .catch((err) => ({ streams: [], _addonUrl: manifestUrl, _error: String(err?.message ?? err ?? 'unknown') })); // Catch aborts silently so Promise.allSettled doesn't fail
+      .catch((err) => {
+        const msg = String(err?.message ?? err ?? 'unknown');
+        if (!/abort/i.test(msg)) console.error(`[addon fetch] ${manifestUrl}: ${msg}`);
+        return { streams: [], _addonUrl: manifestUrl, _error: msg };
+      }); // Catch aborts silently so Promise.allSettled doesn't fail
   });
 
   const results = await Promise.allSettled(fetchPromises);
@@ -564,7 +569,8 @@ export default async function handler(req, res) {
     // don't see a different IP and flag the session.
     const warmupHeaders = {};
     if (clientIp) { warmupHeaders['X-Forwarded-For'] = clientIp; warmupHeaders['X-Real-IP'] = clientIp; }
-    fetch(warmupUrl, { headers: warmupHeaders }).catch(() => {});
+    const warmupPromise = fetch(warmupUrl, { headers: warmupHeaders }).catch(() => {});
+    waitUntil(warmupPromise);
   }
 
   res.setHeader('Access-Control-Allow-Origin', '*');
