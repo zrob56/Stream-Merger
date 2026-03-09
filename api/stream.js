@@ -6,7 +6,7 @@ import { createHash } from 'crypto';
 import { waitUntil } from '@vercel/functions';
 import {
   parseConfig, parseId, buildStreamUrl, fetchWithTimeout,
-  isCachedDebrid, extractSeeders, extractSizeGb, extractResolution, extractEpisodes,
+  isCachedDebrid, extractSeeders, extractSizeGb, extractResolution, extractEpisodes, extractSeasons,
   QUALITY_ORDER, FETCH_TIMEOUT_MS,
 } from './utils/parse.js';
 import { sortStreams } from './utils/sort.js';
@@ -484,6 +484,7 @@ export default async function handler(req, res) {
 
   // Folder popup fix & strict episode matching for series
   if (type === 'series') {
+    const reqSeason = parseInt(season, 10);
     const reqEp = parseInt(episode, 10);
     allStreams = allStreams.filter(s => {
       // 1. Drop infoHash season packs without a specific file index
@@ -491,7 +492,10 @@ export default async function handler(req, res) {
       // 2. Strict episode parsing to block bleeding from other episodes
       const eps = extractEpisodes(s);
       if (eps.length > 0 && !eps.includes(reqEp)) return false;
-      // 3. Drop massive unresolved proxy packs (No infoHash + No Ep Number + >20GB)
+      // 3. Strict season parsing to block bleeding from other seasons
+      const seasons = extractSeasons(s);
+      if (seasons.length > 0 && !seasons.includes(reqSeason)) return false;
+      // 4. Drop massive unresolved proxy packs (No infoHash + No Ep Number + >20GB)
       if (!s.infoHash && eps.length === 0 && extractSizeGb(s) > 20) return false;
       return true;
     });

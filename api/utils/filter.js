@@ -12,12 +12,24 @@ import { SOURCE_QUALITY_ORDER } from './sort.js';
 // Filter application
 // ---------------------------------------------------------------------------
 
+// Patterns that identify trailer/teaser/promo streams — never valid playback sources.
+const TRAILER_RE = /\b(trailer|teaser|promo|featurette|behind[\s-]the[\s-]scenes|making[\s-]of|deleted[\s-]scene|bonus[\s-]clip|official[\s-]clip)\b/i;
+
+function isTrailerStream(s) {
+  const h = `${s.name ?? ''} ${s.title ?? ''}`;
+  if (TRAILER_RE.test(h)) return true;
+  // YouTube / short external-only links that addons sometimes return as trailers
+  if (typeof s.externalUrl === 'string' && /youtube\.com|youtu\.be/i.test(s.externalUrl) && !s.infoHash && !s.url) return true;
+  return false;
+}
+
 export function applyFilters(streams, filters) {
   const needTagCheck = filters.requiredHdr.length > 0 || filters.requiredCodec.length > 0
     || (filters.requiredSource && filters.requiredSource.length > 0)
     || (filters.requiredAudio && filters.requiredAudio.length > 0);
 
   return streams.filter(s => {
+    if (isTrailerStream(s)) return false;
     if (filters.excludeTerms.length > 0) {
       const hay = `${s.name ?? ''} ${s.title ?? ''}`.toLowerCase();
       if (filters.excludeTerms.some(t => hay.includes(t))) return false;

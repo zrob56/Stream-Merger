@@ -225,7 +225,7 @@ function SelectedAddonRow({ index, url, name, onRemove, onMoveUp, onMoveDown, is
           type: 'number', min: 1, max: 60, step: 1,
           value: timeout > 0 ? timeout / 1000 : '',
           onChange: e => { const v = parseFloat(e.target.value); onTimeoutChange(isNaN(v) || v <= 0 ? 0 : Math.round(v * 1000)); },
-          placeholder: '7',
+          placeholder: '3',
           className: 'w-14 bg-surface border border-border rounded px-1.5 py-0.5 text-xs text-zinc-300 outline-none focus:border-accent text-right'
         }),
         h('span', { className: 'text-xs text-zinc-600' }, 's')
@@ -1112,10 +1112,10 @@ function App() {
     || filters.requiredCodec.length > 0 || filters.requiredSource.length > 0 || filters.requiredAudio.length > 0;
 
   const addonCountPenalty = validAddons.length * 4;
-  const perAddonTimeouts = validAddons.map(a => addonTimeouts[a.url] ?? 5000);
+  const perAddonTimeouts = validAddons.map(a => addonTimeouts[a.url] ?? 3000);
   const avgTimeoutMs = perAddonTimeouts.length > 0
     ? Math.round(perAddonTimeouts.reduce((sum, v) => sum + v, 0) / perAddonTimeouts.length)
-    : 5000;
+    : 3000;
   const timeoutPenalty = Math.floor(avgTimeoutMs / 1000) * 2;
   const capPenalty = addonCap > 0 ? Math.floor(addonCap / 5) : 6;
   const tierPenalty = (2 * tierTop) + tierBalanced + tierEfficient;

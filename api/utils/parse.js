@@ -78,6 +78,17 @@ export function extractSourceQuality(stream) {
   return 'unknown';
 }
 
+export function extractSeasons(stream) {
+  const h = getHaystack(stream);
+  const seasons = new Set();
+  let m;
+  const sxeRegex = /s(\d{1,2})\s*e\d{1,3}/gi;
+  while ((m = sxeRegex.exec(h)) !== null) seasons.add(parseInt(m[1], 10));
+  const xRegex = /(?:\b|^)(\d{1,2})x\d{1,3}\b/gi;
+  while ((m = xRegex.exec(h)) !== null) seasons.add(parseInt(m[1], 10));
+  return Array.from(seasons);
+}
+
 export function extractEpisodes(stream) {
   const h = getHaystack(stream);
   const eps = new Set();
@@ -144,9 +155,16 @@ export function extractSizeGb(stream) {
     if (v > 0 && v <= MAX_GB) return v;
   }
 
+  const matchKb = h.match(new RegExp(`${NUM_RE}\\s*(?:kib|kb)\\b`, 'i'));
+  if (matchKb) {
+    const v = parseLooseNumber(matchKb[1]) / (1024 * 1024);
+    if (v > 0 && v <= MAX_GB) return v;
+  }
+
   // Plain large numeric tokens without a unit are often raw bytes, but only
   // trust them when size context words are present.
-  const hasSizeContext = /\b(size|video\s*size|filesize|file\s*size|bytes?)\b/i.test(h);
+  // The 💾 emoji is also treated as a size context signal (used by Sootio and similar addons).
+  const hasSizeContext = /\b(size|video\s*size|filesize|file\s*size|bytes?)\b/i.test(h) || /💾/.test(h);
   if (hasSizeContext) {
     const matchPlainBytes = h.match(/\b(\d{7,}(?:,\d{3})*)\b/);
     if (matchPlainBytes) {
@@ -202,7 +220,7 @@ export function getCacheTier(stream) {
   if (h.includes('cached') || h.includes('⚡') || h.includes('🟢') || h.includes('rd+') || h.includes('ad+') || h.includes('pm+') || h.includes('dl+') || h.includes('tb+') || /\[(rd|ad|pm|dl|tb)\]/.test(h)) return 'cached';
   if (typeof stream.url === 'string' && !stream.infoHash && !stream.url.startsWith('magnet:')) {
     const addon = (stream._addonName || '').toLowerCase();
-    const proxyAddons = ['torrentio', 'stremthru', 'comet', 'mediafusion', 'torrentsdb'];
+    const proxyAddons = ['torrentio', 'stremthru', 'comet', 'mediafusion', 'torrentsdb', 'jackettio', 'knightcrawler', 'annatar'];
     if (proxyAddons.includes(addon) && !stream._trustProxies) return 'download';
     return 'cached';
   }

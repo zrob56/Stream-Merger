@@ -123,6 +123,9 @@ export function formatStreamDisplay(streams, display) {
  * @returns {object}
  */
 export function sanitizeStream({ _addonIdx, _addonUrl, _addonName, _sources, description, ...s }) {
+  for (const key of Object.keys(s)) {
+    if (key.startsWith('_')) delete s[key];
+  }
   if (s.url) {
     delete s.infoHash;
     delete s.fileIdx;
