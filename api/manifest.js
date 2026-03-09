@@ -19,8 +19,7 @@ export default function handler(req, res) {
     ...(logo && { logo }),
     resources: ['stream'],
     types: ['movie', 'series'],
-    // Support common provider-prefixed IDs as well as IMDb IDs.
-    idPrefixes: ['tt', 'tmdb:', 'kitsu:', 'mal:', 'anidb:'],
+    idPrefixes: ['tt'],
     // No catalogs — rely on Cinemeta or Trakt for browsing.
     catalogs: [],
     behaviorHints: {
