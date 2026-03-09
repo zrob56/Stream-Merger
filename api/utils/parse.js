@@ -104,12 +104,19 @@ export function extractEpisodes(stream) {
   return Array.from(eps);
 }
 
+const _SIZE_GIB   = 1024 * 1024 * 1024;
+const _SIZE_MAX   = 500;
+const _SIZE_NUM   = '(\\d{1,3}(?:,\\d{3})+|\\d+(?:\\.\\d+)?)';
+const _BYTES_RE   = new RegExp(`${_SIZE_NUM}\\s*bytes?\\b`, 'i');
+const _GB_RE      = new RegExp(`${_SIZE_NUM}\\s*(?:gib|gb)\\b`, 'i');
+const _MB_RE      = new RegExp(`${_SIZE_NUM}\\s*(?:mib|mb)\\b`, 'i');
+const _KB_RE      = new RegExp(`${_SIZE_NUM}\\s*(?:kib|kb)\\b`, 'i');
+
 export function extractSizeGb(stream) {
   if (stream._size !== undefined) return stream._size;
 
-  const GIB = 1024 * 1024 * 1024;
-  const MAX_GB = 500;
-  const NUM_RE = '(\\d{1,3}(?:,\\d{3})+|\\d+(?:\\.\\d+)?)';
+  const GIB    = _SIZE_GIB;
+  const MAX_GB = _SIZE_MAX;
 
   function parseLooseNumber(v) {
     if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
@@ -134,13 +141,13 @@ export function extractSizeGb(stream) {
   // 2. Fallback to text parsing if native sizes aren't provided.
   const h = getHaystack(stream);
 
-  const matchBytes = h.match(new RegExp(`${NUM_RE}\\s*bytes?\\b`, 'i'));
+  const matchBytes = h.match(_BYTES_RE);
   if (matchBytes) {
     const fromBytesText = bytesToGb(parseLooseNumber(matchBytes[1]));
     if (fromBytesText > 0) return fromBytesText;
   }
 
-  const matchGb = h.match(new RegExp(`${NUM_RE}\\s*(?:gib|gb)\\b`, 'i'));
+  const matchGb = h.match(_GB_RE);
   if (matchGb) {
     const v = parseLooseNumber(matchGb[1]);
     if (v > 0 && v <= MAX_GB) return v;
@@ -149,13 +156,13 @@ export function extractSizeGb(stream) {
     if (asBytesGb > 0) return asBytesGb;
   }
 
-  const matchMb = h.match(new RegExp(`${NUM_RE}\\s*(?:mib|mb)\\b`, 'i'));
+  const matchMb = h.match(_MB_RE);
   if (matchMb) {
     const v = parseLooseNumber(matchMb[1]) / 1024;
     if (v > 0 && v <= MAX_GB) return v;
   }
 
-  const matchKb = h.match(new RegExp(`${NUM_RE}\\s*(?:kib|kb)\\b`, 'i'));
+  const matchKb = h.match(_KB_RE);
   if (matchKb) {
     const v = parseLooseNumber(matchKb[1]) / (1024 * 1024);
     if (v > 0 && v <= MAX_GB) return v;

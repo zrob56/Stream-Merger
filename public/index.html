@@ -196,7 +196,7 @@ function isValidUrl(str) {
 
 // Normalize a manifest URL into a transport URL (strip /manifest.json suffix).
 function toTransportUrl(url) {
-  return url.replace(/^stremio:\/\//, 'https://').replace(/\/manifest\.json$/, '');
+  return url.replace(/^stremio:\/\//, 'https://').replace(/\/manifest\.json$/, '').replace(/\/+$/, '');
 }
 
 // ---------------------------------------------------------------------------

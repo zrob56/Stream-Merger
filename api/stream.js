@@ -488,10 +488,15 @@ export default async function handler(req, res) {
     const reqEp = parseInt(episode, 10);
     if (!isNaN(reqSeason) && !isNaN(reqEp)) {
     allStreams = allStreams.filter(s => {
-      // 1. Drop infoHash season packs without a specific file index
-      if (s.infoHash && s.fileIdx == null && s.fileIndex == null) return false;
-      // 2. Strict episode parsing to block bleeding from other episodes
       const eps = extractEpisodes(s);
+      // 1. Drop infoHash season packs without a specific file index.
+      // Single-file torrents often omit fileIdx entirely (implicitly 0), so only
+      // drop when we can confirm it's actually a multi-file pack.
+      if (s.infoHash && s.fileIdx == null && s.fileIndex == null) {
+        const isLikelyPack = extractSizeGb(s) > 3.5 || eps.length > 1 || /\b(season|pack|complete)\b/i.test(`${s.name ?? ''} ${s.title ?? ''}`);
+        if (isLikelyPack) return false;
+      }
+      // 2. Strict episode parsing to block bleeding from other episodes
       if (eps.length > 0 && !eps.includes(reqEp)) return false;
       // 3. Strict season parsing to block bleeding from other seasons
       const seasons = extractSeasons(s);
