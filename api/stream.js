@@ -504,15 +504,16 @@ export default async function handler(req, res) {
   }
 
   // --- Consolidation pipeline ---
-  // Order matters: sort/dedup/bingeGroup read the original name/title;
-  // formatStreamDisplay must run last so it doesn't corrupt those reads.
-  const sorted      = sortStreams(allStreams, sort, type);
-  const deduped     = deduplicateStreams(sorted);
-  let filtered      = applyFilters(deduped, filters);
+  // Dedup before sort: fewer streams to sort. Canonical stream comes from the
+  // circuit-breaker-ordered addon list (most reliable first), which is fine.
+  // formatStreamDisplay must run last so it doesn't corrupt name/title reads.
+  const deduped     = deduplicateStreams(allStreams);
+  const sorted      = sortStreams(deduped, sort, type);
+  let filtered      = applyFilters(sorted, filters);
 
-  // Fallback 1: If strict filters blocked everything, revert to deduped pool
-  if (filtered.length === 0 && deduped.length > 0) {
-    filtered = deduped;
+  // Fallback 1: If strict filters blocked everything, revert to sorted pool
+  if (filtered.length === 0 && sorted.length > 0) {
+    filtered = sorted;
   }
 
   let tiered        = applySmartTiering(filtered, tierTop, tierBalanced, tierEfficient, { runtimeMinutes });
@@ -522,7 +523,10 @@ export default async function handler(req, res) {
     tiered = filtered;
   }
   const normalized  = normalizeBingeGroup(tiered, imdbId);
-  const formatted   = formatStreamDisplay(normalized, display);
+
+  // Slice before format/sanitize so we only process streams that will be shown
+  const sliced      = limit > 0 ? normalized.slice(0, limit) : normalized;
+  const formatted   = formatStreamDisplay(sliced, display);
 
   // Count surviving streams per addon (before sanitizing _addonIdx) for debug
   const survivingCounts = {};
@@ -531,10 +535,7 @@ export default async function handler(req, res) {
     survivingCounts[idx] = (survivingCounts[idx] ?? 0) + 1;
   }
 
-  const displayed = formatted.map(sanitizeStream);
-
-  // Apply limit to real streams BEFORE debug so the debug entry always appears last
-  const final = limit > 0 ? displayed.slice(0, limit) : displayed.slice();
+  const final = formatted.map(sanitizeStream);
 
   if (debug) {
     const lines = [];
