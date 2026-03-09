@@ -97,7 +97,7 @@ export function extractEpisodes(stream) {
   const xRegex = /(?:\b|^)\d{1,2}x(\d{1,3})\b/gi; while ((m = xRegex.exec(h)) !== null) eps.add(parseInt(m[1], 10));
   const rangeRegex = /e(\d{1,3})\s*-\s*(?:e)?(\d{1,3})/gi; while ((m = rangeRegex.exec(h)) !== null) {
     const start = parseInt(m[1], 10), end = parseInt(m[2], 10);
-    if (start < end && end - start < 100) for (let i = start; i <= end; i++) eps.add(i);
+    if (start < end && end - start < 500) for (let i = start; i <= end; i++) eps.add(i);
   }
   const epRegex = /(?:episode|ep)\s*0*(\d{1,3})\b/gi; while ((m = epRegex.exec(h)) !== null) eps.add(parseInt(m[1], 10));
   const standaloneRegex = /\be0*(\d{1,3})\b/gi; while ((m = standaloneRegex.exec(h)) !== null) eps.add(parseInt(m[1], 10));

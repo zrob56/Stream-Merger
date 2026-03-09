@@ -486,6 +486,7 @@ export default async function handler(req, res) {
   if (type === 'series') {
     const reqSeason = parseInt(season, 10);
     const reqEp = parseInt(episode, 10);
+    if (!isNaN(reqSeason) && !isNaN(reqEp)) {
     allStreams = allStreams.filter(s => {
       // 1. Drop infoHash season packs without a specific file index
       if (s.infoHash && s.fileIdx == null && s.fileIndex == null) return false;
@@ -499,6 +500,7 @@ export default async function handler(req, res) {
       if (!s.infoHash && eps.length === 0 && extractSizeGb(s) > 20) return false;
       return true;
     });
+    }
   }
 
   // --- Consolidation pipeline ---

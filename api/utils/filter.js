@@ -15,11 +15,16 @@ import { SOURCE_QUALITY_ORDER } from './sort.js';
 // Patterns that identify trailer/teaser/promo streams — never valid playback sources.
 const TRAILER_RE = /\b(trailer|teaser|promo|featurette|behind[\s-]the[\s-]scenes|making[\s-]of|deleted[\s-]scene|bonus[\s-]clip|official[\s-]clip)\b/i;
 
+// Site-ad spam torrents: tiny video file named after a piracy domain (e.g. rarbg.com.mp4)
+const SPAM_DOMAIN_RE = /\b(?:rarbg|yts|eztv|limetorrents|torrentgalaxy|1337x|thepiratebay|kickass|ganool|extratorrents|torrentz)\s*\.(?:com|to|org|me|ag|io|net)\b/i;
+
 function isTrailerStream(s) {
-  const h = `${s.name ?? ''} ${s.title ?? ''}`;
+  const h = `${s.name ?? ''} ${s.title ?? ''} ${s.behaviorHints?.filename ?? ''}`;
   if (TRAILER_RE.test(h)) return true;
   // YouTube / short external-only links that addons sometimes return as trailers
   if (typeof s.externalUrl === 'string' && /youtube\.com|youtu\.be/i.test(s.externalUrl) && !s.infoHash && !s.url) return true;
+  // Site-ad spam: tiny file (<5 MB) whose name is a piracy domain
+  if (SPAM_DOMAIN_RE.test(h) && extractSizeGb(s) < 0.005) return true;
   return false;
 }
 
@@ -36,21 +41,22 @@ export function applyFilters(streams, filters) {
     }
     if (needTagCheck) {
       const tags = extractQualityTags(s);
+      const hasMetadata = !!(s.name || s.title || s.behaviorHints?.filename);
       if (filters.requiredHdr.length > 0) {
         const detected = HDR_LABELS.filter(h => tags.includes(h));
-        if (detected.length > 0 && !filters.requiredHdr.some(h => detected.includes(h))) return false;
+        if (hasMetadata && !filters.requiredHdr.some(h => detected.includes(h))) return false;
       }
       if (filters.requiredCodec.length > 0) {
         const detected = CODEC_LABELS.filter(c => tags.includes(c));
-        if (detected.length > 0 && !filters.requiredCodec.some(c => detected.includes(c))) return false;
+        if (hasMetadata && !filters.requiredCodec.some(c => detected.includes(c))) return false;
       }
       if (filters.requiredSource && filters.requiredSource.length > 0) {
         const detected = SOURCE_LABELS.filter(src => tags.includes(src));
-        if (detected.length > 0 && !filters.requiredSource.some(src => detected.includes(src))) return false;
+        if (hasMetadata && !filters.requiredSource.some(src => detected.includes(src))) return false;
       }
       if (filters.requiredAudio && filters.requiredAudio.length > 0) {
         const detected = AUDIO_LABELS.filter(a => tags.includes(a));
-        if (detected.length > 0 && !filters.requiredAudio.some(a => detected.includes(a))) return false;
+        if (hasMetadata && !filters.requiredAudio.some(a => detected.includes(a))) return false;
       }
     }
     if (filters.cachedOnly && !isCachedDebrid(s)) return false;
