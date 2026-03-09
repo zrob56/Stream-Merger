@@ -13,18 +13,21 @@ import { SOURCE_QUALITY_ORDER } from './sort.js';
 // ---------------------------------------------------------------------------
 
 // Patterns that identify trailer/teaser/promo streams — never valid playback sources.
-const TRAILER_RE = /\b(trailer|teaser|promo|featurette|behind[\s-]the[\s-]scenes|making[\s-]of|deleted[\s-]scene|bonus[\s-]clip|official[\s-]clip)\b/i;
+// Dot-separated filenames (e.g. The.Making.Of.mkv) are normalized to spaces before testing.
+const TRAILER_RE = /\b(trailer|teaser|promo|featurette|behind[\s-]the[\s-]scenes|making[\s-]of|deleted[\s-]scene|bonus[\s-]clip|official[\s-]clip|interview|extra|special[\s-]feature|b[\s-]?roll|sample|recap|gag[\s-]reel|bloopers?)\b/i;
 
 // Site-ad spam torrents: tiny video file named after a piracy domain (e.g. rarbg.com.mp4)
 const SPAM_DOMAIN_RE = /\b(?:rarbg|yts|eztv|limetorrents|torrentgalaxy|1337x|thepiratebay|kickass|ganool|extratorrents|torrentz)\s*\.(?:com|to|org|me|ag|io|net)\b/i;
 
 function isTrailerStream(s) {
-  const h = `${s.name ?? ''} ${s.title ?? ''} ${s.behaviorHints?.filename ?? ''}`;
+  const raw = `${s.name ?? ''} ${s.title ?? ''} ${s.behaviorHints?.filename ?? ''}`;
+  // Normalize dot-separated filenames so word-boundary checks work correctly
+  const h = raw.replace(/\./g, ' ');
   if (TRAILER_RE.test(h)) return true;
   // YouTube / short external-only links that addons sometimes return as trailers
   if (typeof s.externalUrl === 'string' && /youtube\.com|youtu\.be/i.test(s.externalUrl) && !s.infoHash && !s.url) return true;
   // Site-ad spam: tiny file (<5 MB) whose name is a piracy domain
-  if (SPAM_DOMAIN_RE.test(h) && extractSizeGb(s) < 0.005) return true;
+  if (SPAM_DOMAIN_RE.test(raw) && extractSizeGb(s) < 0.005) return true;
   return false;
 }
 

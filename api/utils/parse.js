@@ -29,6 +29,17 @@ export const AUDIO_TAGS = [
   [/\batmos\b/i, 'Atmos'], [/\btruehd\b/i, 'TrueHD'], [/\bdd\+|\bddp\b|\beac[- ]?3\b/i, 'DD+'],
   [/\bdts[- ]?hd\b/i, 'DTS-HD'], [/\bdts\b/i, 'DTS'], [/\baac\b/i, 'AAC'],
 ];
+export const EDITION_TAGS = [
+  [/\bdirector'?s[. ]cut\b/i,                "Director's Cut"],
+  [/\bextended[. ](?:cut|edition|version)\b|\bextended\b/i, 'Extended'],
+  [/\bunrated\b/i,                            'Unrated'],
+  [/\btheatrical[. ](?:cut|edition|version)\b/i, 'Theatrical'],
+  [/\bultimate[. ](?:cut|edition|version)\b/i,   'Ultimate Cut'],
+  [/\bfinal[. ]cut\b/i,                       'Final Cut'],
+  [/\bremastered?\b/i,                        'Remastered'],
+  [/\bspecial[. ]edition\b/i,                 'Special Edition'],
+  [/\bcollector'?s[. ]edition\b/i,            "Collector's Edition"],
+];
 
 export const HDR_LABELS    = HDR_TAGS.map(([, label]) => label);
 export const CODEC_LABELS  = CODEC_TAGS.map(([, label]) => label);
@@ -213,6 +224,8 @@ export function formatTagsWithIcons(stream) {
   const hdr = HDR_TAGS.filter(([re]) => re.test(h)).map(([, l]) => l);
   const codec = CODEC_TAGS.filter(([re]) => re.test(h)).map(([, l]) => l);
   const audio = AUDIO_TAGS.filter(([re]) => re.test(h)).map(([, l]) => l);
+  const edition = EDITION_TAGS.filter(([re]) => re.test(h)).map(([, l]) => l);
+  if (edition.length) parts.push(`✂️ ${edition.join(' · ')}`);
   if (src.length) parts.push(`🎬 ${src.join(' · ')}`);
   if (hdr.length) parts.push(`✨ ${hdr.join(' · ')}`);
   if (codec.length) parts.push(`🎞️ ${codec.join(' · ')}`);
