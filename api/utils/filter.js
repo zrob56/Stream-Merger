@@ -3,7 +3,7 @@
 
 import {
   extractResolution, extractSourceQuality, extractQualityTags,
-  extractSeeders, extractSizeGb, extractBitrateMbps, isCachedDebrid, extractEpisodes,
+  extractSeeders, extractSizeGb, extractBitrateMbps, isCachedDebrid,
   HDR_LABELS, CODEC_LABELS, SOURCE_LABELS, AUDIO_LABELS, QUALITY_ORDER,
 } from './parse.js';
 import { SOURCE_QUALITY_ORDER } from './sort.js';
@@ -140,17 +140,24 @@ export function deduplicateStreams(streams) {
     const rawTag = tagMatch ? tagMatch[1] : 'any';
     const tag = FALSE_POSITIVE_TAGS.has(rawTag) ? 'any' : rawTag;
 
-    const key = `${res}|${src}|${codec}|${ext}|${tag}`;
+    // Tag is intentionally excluded from the bucket key so that streams where one
+    // addon reports a release tag and another doesn't are still compared by size.
+    // The tag is stored on each candidate so we can skip merging when both sides
+    // have known (and different) release group tags — those are genuinely different files.
+    const key = `${res}|${src}|${codec}|${ext}`;
 
     if (!fuzzyBuckets.has(key)) {
-      fuzzyBuckets.set(key, [{ idx: i, size: sizeA }]);
+      fuzzyBuckets.set(key, [{ idx: i, size: sizeA, tag }]);
       continue;
     }
 
     const candidates = fuzzyBuckets.get(key);
     let merged = false;
     for (const cand of candidates) {
-      const margin = tag !== 'any' ? 0.5 : Math.max(0.02, sizeA * 0.05);
+      // Two known-but-different release tags → different files, never merge
+      if (tag !== 'any' && cand.tag !== 'any' && tag !== cand.tag) continue;
+      // Use a tighter margin when neither side has a tag; looser when at least one does
+      const margin = (tag !== 'any' || cand.tag !== 'any') ? 0.5 : Math.max(0.02, sizeA * 0.05);
       if (Math.abs(cand.size - sizeA) <= margin) {
         const dupSrc = s._addonName ?? '';
         if (dupSrc && !result[cand.idx]._sources.includes(dupSrc)) {
@@ -161,7 +168,7 @@ export function deduplicateStreams(streams) {
         break;
       }
     }
-    if (!merged) candidates.push({ idx: i, size: sizeA });
+    if (!merged) candidates.push({ idx: i, size: sizeA, tag });
   }
 
   return result.filter((_, i) => keep[i]);
@@ -231,15 +238,11 @@ export function applySmartTiering(streams, tierTop, tierBalanced, tierEfficient,
 
   for (const s of streams) {
     const r = extractResolution(s);
-    const eps = extractEpisodes(s);
-    const isPack = eps.length !== 1 ? 'pack' : 'single';
-    const key = `${r}-${isPack}`;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(s);
+    if (!groups.has(r)) groups.set(r, []);
+    groups.get(r).push(s);
   }
 
-  for (const [key, group] of groups.entries()) {
-    const resolution = key.split('-')[0];
+  for (const [resolution, group] of groups.entries()) {
     let groupMaxSizeGb = 0;
     if (!(runtimeMinutes > 0)) {
       for (const s of group) {
