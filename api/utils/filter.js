@@ -157,7 +157,8 @@ export function deduplicateStreams(streams) {
       // Two known-but-different release tags → different files, never merge
       if (tag !== 'any' && cand.tag !== 'any' && tag !== cand.tag) continue;
       // Use a tighter margin when neither side has a tag; looser when at least one does
-      const margin = (tag !== 'any' || cand.tag !== 'any') ? 0.5 : Math.max(0.02, sizeA * 0.05);
+      const baseMargin = (tag !== 'any' || cand.tag !== 'any') ? 0.5 : 0.02;
+      const margin = Math.max(baseMargin, sizeA * 0.05);
       if (Math.abs(cand.size - sizeA) <= margin) {
         const dupSrc = s._addonName ?? '';
         if (dupSrc && !result[cand.idx]._sources.includes(dupSrc)) {

@@ -440,7 +440,7 @@ export default async function handler(req, res) {
             }
           }
         }
-        return { ...result, _addonUrl: manifestUrl };
+        return { streams: survivors, _addonUrl: manifestUrl };
       })
       .catch((err) => {
         const msg = String(err?.message ?? err ?? 'unknown');
@@ -452,6 +452,7 @@ export default async function handler(req, res) {
   const results = await Promise.allSettled(fetchPromises);
 
   // Collect streams; addonCap applied per-addon before merge
+  // streams are already filtered survivors — only _addonIdx needs to be added
   let allStreams = [];
   for (let i = 0; i < results.length; i++) {
     const result = results[i];
@@ -459,16 +460,11 @@ export default async function handler(req, res) {
       const streams = result.value?.streams;
       if (Array.isArray(streams)) {
         const slice = addonCap > 0 ? streams.slice(0, addonCap) : streams;
-        allStreams.push(...slice.map(s => {
-          const clean = Object.fromEntries(Object.entries(s).filter(([k]) => !k.startsWith('_')));
-          return {
-            ...clean,
-            _addonIdx:      i,
-            _addonUrl:      fetchAddons[i].url,
-            _addonName:     identifyAddonName(s, fetchAddons[i].url),
-            _trustProxies:  trustProxies,
-          };
-        }));
+        allStreams.push(...slice.map(s => ({
+          ...s,
+          _addonIdx: i,
+          _addonUrl: fetchAddons[i].url,
+        })));
       }
     }
   }
