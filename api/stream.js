@@ -458,13 +458,16 @@ export default async function handler(req, res) {
       const streams = result.value?.streams;
       if (Array.isArray(streams)) {
         const slice = addonCap > 0 ? streams.slice(0, addonCap) : streams;
-        allStreams.push(...slice.map(s => ({
-          ...s,
-          _addonIdx:      i,
-          _addonUrl:      fetchAddons[i].url,
-          _addonName:     identifyAddonName(s, fetchAddons[i].url),
-          _trustProxies:  trustProxies,
-        })));
+        allStreams.push(...slice.map(s => {
+          const clean = Object.fromEntries(Object.entries(s).filter(([k]) => !k.startsWith('_')));
+          return {
+            ...clean,
+            _addonIdx:      i,
+            _addonUrl:      fetchAddons[i].url,
+            _addonName:     identifyAddonName(s, fetchAddons[i].url),
+            _trustProxies:  trustProxies,
+          };
+        }));
       }
     }
   }
