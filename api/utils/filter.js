@@ -20,7 +20,7 @@ const TRAILER_RE = /\b(trailer|teaser|promo|featurette|behind[\s-]the[\s-]scenes
 const SPAM_DOMAIN_RE = /\b(?:rarbg|yts|eztv|limetorrents|torrentgalaxy|1337x|thepiratebay|kickass|ganool|extratorrents|torrentz)\s*\.(?:com|to|org|me|ag|io|net)\b/i;
 
 function isTrailerStream(s) {
-  const raw = `${s.name ?? ''} ${s.title ?? ''} ${s.behaviorHints?.filename ?? ''}`;
+  const raw = `${s.name ?? ''} ${s.title ?? ''} ${s.description ?? ''} ${s.behaviorHints?.filename ?? ''}`;
   // Normalize dot-separated filenames so word-boundary checks work correctly
   const h = raw.replace(/\./g, ' ');
   if (TRAILER_RE.test(h)) return true;
@@ -41,7 +41,7 @@ export function applyFilters(streams, filters) {
   return streams.filter(s => {
     if (isTrailerStream(s)) return false;
     if (filters.excludeTerms.length > 0) {
-      const hay = `${s.name ?? ''} ${s.title ?? ''}`.toLowerCase();
+      const hay = `${s.name ?? ''} ${s.title ?? ''} ${s.description ?? ''} ${s.behaviorHints?.filename ?? ''}`.toLowerCase();
       if (filters.excludeTerms.some(t => hay.includes(t))) return false;
     }
     if (needTagCheck) {

@@ -60,7 +60,7 @@ export function extractResolution(stream) {
   const h = getHaystack(stream);
   if (/\b(4k|2160p|2160|uhd)\b/.test(h)) return '4k';
   if (/\b(1080p|1080i|1080|fhd)\b/.test(h)) return '1080p';
-  if (/\b(720p|720|hd)\b/.test(h)) return '720p';
+  if (/\b(720p|720)\b/.test(h)) return '720p';
   if (/\b(480p|480|576p|576|sd|dvd|dvdrip)\b/.test(h)) return '480p';
   if (/\b(360p|360)\b/.test(h)) return '360p';
   
