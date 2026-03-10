@@ -369,11 +369,14 @@ export default async function handler(req, res) {
         const rawStreams = result?.streams;
         if (Array.isArray(rawStreams) && rawStreams.length > 0) {
           
-          const preppedStreams = rawStreams.map(s => ({
-            ...s,
-            _addonName: identifyAddonName(s, manifestUrl),
-            _trustProxies: trustProxies,
-          }));
+          const preppedStreams = rawStreams.map(s => {
+            const clean = Object.fromEntries(Object.entries(s).filter(([k]) => !k.startsWith('_')));
+            return {
+              ...clean,
+              _addonName: identifyAddonName(s, manifestUrl),
+              _trustProxies: trustProxies,
+            };
+          });
 
           const survivors = applyFilters(preppedStreams, filters);
           accumulatedStreams.push(...survivors);
