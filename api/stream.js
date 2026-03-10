@@ -381,13 +381,17 @@ export default async function handler(req, res) {
           });
 
           survivors = applyFilters(preppedStreams, filters);
-          accumulatedStreams.push(...survivors);
-          // Fast approximate dedup for early-exit: track seen keys in a Set
+          // Deduplicate early-exit accumulation so the tier check isn't fooled
+          // by the same infoHash appearing across multiple addons.
           for (const s of survivors) {
             const key = s.infoHash
               ? (s.infoHash + (s.fileIdx > 0 ? ':' + s.fileIdx : ''))
               : (s.url ?? s.behaviorHints?.filename ?? null);
-            if (key) earlyExitSeen.add(key.toLowerCase());
+            if (key) {
+              if (earlyExitSeen.has(key.toLowerCase())) continue; // skip cross-addon duplicate
+              earlyExitSeen.add(key.toLowerCase());
+            }
+            accumulatedStreams.push(s); // only unique streams counted toward tier target
           }
 
           if (tierSlots > 0) {
