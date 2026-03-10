@@ -89,7 +89,7 @@ export function deduplicateStreams(streams) {
 
   for (const stream of streams) {
     let key = stream.infoHash
-      ? (stream.infoHash + (stream.fileIdx != null ? ':' + stream.fileIdx : ''))
+      ? (stream.infoHash + (stream.fileIdx > 0 ? ':' + stream.fileIdx : ''))
       : (stream.url ?? null);
     if (!key && stream.behaviorHints?.filename) {
       key = `filename:${stream.behaviorHints.filename}`;

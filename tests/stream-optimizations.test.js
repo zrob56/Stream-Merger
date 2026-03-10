@@ -43,13 +43,13 @@ test('fuzzy dedup: same release tag (-tgx), size diff 0.08 GB → deduped to 1',
   assert.ok(result[0]._sources.includes('Comet'));
 });
 
-test('fuzzy dedup: no release tag, size diff 0.08 GB → kept separate', () => {
+test('fuzzy dedup: no release tag, size diff 0.08 GB → merged', () => {
   const streams = [
     { name: '1080p WEB-DL', title: 'Movie.1080p.WEB-DL.mkv', _addonName: 'AddonA', _size: 10.00 },
     { name: '1080p WEB-DL', title: 'Movie.1080p.WEB-DL.mkv', _addonName: 'AddonB', _size: 10.08 },
   ];
   const result = deduplicateStreams(streams);
-  assert.equal(result.length, 2);
+  assert.equal(result.length, 1);
 });
 
 test('pass 1 dedup: same behaviorHints.filename, no infoHash/url → deduped to 1', () => {

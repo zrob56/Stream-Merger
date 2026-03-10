@@ -383,7 +383,7 @@ export default async function handler(req, res) {
           // Fast approximate dedup for early-exit: track seen keys in a Set
           for (const s of survivors) {
             const key = s.infoHash
-              ? (s.infoHash + (s.fileIdx != null ? ':' + s.fileIdx : ''))
+              ? (s.infoHash + (s.fileIdx > 0 ? ':' + s.fileIdx : ''))
               : (s.url ?? s.behaviorHints?.filename ?? null);
             if (key) earlyExitSeen.add(key.toLowerCase());
           }
