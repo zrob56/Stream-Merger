@@ -14,7 +14,7 @@ import { SOURCE_QUALITY_ORDER } from './sort.js';
 
 // Patterns that identify trailer/teaser/promo streams — never valid playback sources.
 // Dot-separated filenames (e.g. The.Making.Of.mkv) are normalized to spaces before testing.
-const TRAILER_RE = /\b(trailer|teaser|promo|featurette|behind[\s-]the[\s-]scenes|making[\s-]of|deleted[\s-]scene|bonus[\s-]clip|official[\s-]clip|interview|extra|special[\s-]feature|b[\s-]?roll|sample|recap|gag[\s-]reel|bloopers?)\b/i;
+const TRAILER_RE = /\b(trailer|teaser|promo|featurette|behind[\s-]the[\s-]scenes|making[\s-]of|deleted[\s-]scene|bonus[\s-]clip|official[\s-]clip|interview|extra|special[\s-]feature|b[\s-]?roll|sample|recap|gag[\s-]reel|bloopers?|advert(?:isement)?s?)\b/i;
 
 // Site-ad spam torrents: tiny video file named after a piracy domain (e.g. rarbg.com.mp4)
 const SPAM_DOMAIN_RE = /\b(?:rarbg|yts|eztv|limetorrents|torrentgalaxy|1337x|thepiratebay|kickass|ganool|extratorrents|torrentz)\s*\.(?:com|to|org|me|ag|io|net)\b/i;
@@ -24,6 +24,8 @@ function isTrailerStream(s) {
   // Normalize dot-separated filenames so word-boundary checks work correctly
   const h = raw.replace(/\./g, ' ');
   if (TRAILER_RE.test(h)) return true;
+  // Vintage TV commercials: standalone word "ad" in filename, tiny file (≤ 50 MB)
+  if (/\bad\b/i.test(h) && extractSizeGb(s) < 0.05) return true;
   // YouTube / short external-only links that addons sometimes return as trailers
   if (typeof s.externalUrl === 'string' && /youtube\.com|youtu\.be/i.test(s.externalUrl) && !s.infoHash && !s.url) return true;
   // Site-ad spam: tiny file (<5 MB) whose name is a piracy domain
@@ -219,24 +221,6 @@ export function classifyStreamTier(stream, resolution, options = {}) {
   return 'top';
 }
 
-function intraTierComparator(a, b) {
-  const srcA = SOURCE_QUALITY_ORDER.indexOf(a._source ?? 'unknown');
-  const srcB = SOURCE_QUALITY_ORDER.indexOf(b._source ?? 'unknown');
-  const srcDiff = (srcA === -1 ? SOURCE_QUALITY_ORDER.length : srcA)
-                - (srcB === -1 ? SOURCE_QUALITY_ORDER.length : srcB);
-  if (srcDiff !== 0) return srcDiff;
-
-  const hdrDiff = (a._hdrTier ?? Infinity) - (b._hdrTier ?? Infinity);
-  if (hdrDiff !== 0) return hdrDiff;
-
-  const audioDiff = (a._audioTier ?? Infinity) - (b._audioTier ?? Infinity);
-  if (audioDiff !== 0) return audioDiff;
-
-  const codecDiff = (a._codecTier ?? Infinity) - (b._codecTier ?? Infinity);
-  if (codecDiff !== 0) return codecDiff;
-
-  return (b._seeders ?? 0) - (a._seeders ?? 0);
-}
 
 export function applySmartTiering(streams, tierTop, tierBalanced, tierEfficient, options = {}) {
   if (tierTop <= 0 && tierBalanced <= 0 && tierEfficient <= 0) return streams;
@@ -281,10 +265,6 @@ export function applySmartTiering(streams, tierTop, tierBalanced, tierEfficient,
       else if (tier === 'balanced') balancedStreams.push(s);
       else efficientStreams.push(s);
     }
-
-    topStreams.sort(intraTierComparator);
-    balancedStreams.sort(intraTierComparator);
-    efficientStreams.sort(intraTierComparator);
 
     const selected = [];
 

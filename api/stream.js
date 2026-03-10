@@ -116,6 +116,7 @@ function identifyAddonName(stream, manifestUrl) {
   if (haystack.includes('jackettio'))     return 'Jackettio';
   if (haystack.includes('knightcrawler')) return 'KnightCrawler';
   if (haystack.includes('annatar'))       return 'Annatar';
+  if (haystack.includes('debrid-search'))  return 'DebridSearch';
 
   try {
     const host = new URL(manifestUrl).hostname.toLowerCase();
