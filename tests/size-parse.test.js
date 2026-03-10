@@ -34,3 +34,9 @@ test('extractSizeGb sanity cap rejects absurd values', () => {
   assert.equal(extractSizeGb({ behaviorHints: { videoSize: 800 * 1024 * 1024 * 1024 } }), 0);
   assert.equal(extractSizeGb({ title: '999999999999999 bytes' }), 0);
 });
+
+test('extractSizeGb parses comma-formatted plain bytes with size context', () => {
+  approx(extractSizeGb({ title: '💾 84,878,683,838' }), 84878683838 / (1024 ** 3), 0.01);
+  approx(extractSizeGb({ title: 'file size 2,147,483,648' }), 2, 1e-6);
+});
+

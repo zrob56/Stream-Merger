@@ -184,7 +184,7 @@ export function extractSizeGb(stream) {
   // The 💾 emoji is also treated as a size context signal (used by Sootio and similar addons).
   const hasSizeContext = /\b(size|video\s*size|filesize|file\s*size|bytes?)\b/i.test(h) || /💾/.test(h);
   if (hasSizeContext) {
-    const matchPlainBytes = h.match(/\b(\d{7,}(?:,\d{3})*)\b/);
+    const matchPlainBytes = h.match(/\b(\d{1,3}(?:,\d{3}){2,}|\d{7,})\b/);
     if (matchPlainBytes) {
       const fromPlainBytes = bytesToGb(parseLooseNumber(matchPlainBytes[1]));
       if (fromPlainBytes > 0) return fromPlainBytes;
