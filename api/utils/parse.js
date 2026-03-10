@@ -71,10 +71,10 @@ export function extractResolution(stream) {
     if (!isPack) {
       const isSeries = eps.length === 1 || /\b(episode|ep)\b/i.test(h);
       if (isSeries) {
-        if (size > 3.5) return '4k'; if (size > 1.2) return '1080p';
+        if (size > 1.2) return '1080p';
         if (size > 0.4) return '720p'; return '480p';
       } else {
-        if (size > 12) return '4k'; if (size > 3.0) return '1080p';
+        if (size > 3.0) return '1080p';
         if (size > 0.8) return '720p'; return '480p';
       }
     }
