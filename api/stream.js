@@ -368,8 +368,9 @@ export default async function handler(req, res) {
     return fetchWithTimeout(streamUrl, timeout, forwardIp, abortController.signal)
       .then(result => {
         const rawStreams = result?.streams;
+        let survivors = [];
         if (Array.isArray(rawStreams) && rawStreams.length > 0) {
-          
+
           const preppedStreams = rawStreams.map(s => {
             const clean = Object.fromEntries(Object.entries(s).filter(([k]) => !k.startsWith('_')));
             return {
@@ -379,7 +380,7 @@ export default async function handler(req, res) {
             };
           });
 
-          const survivors = applyFilters(preppedStreams, filters);
+          survivors = applyFilters(preppedStreams, filters);
           accumulatedStreams.push(...survivors);
           // Fast approximate dedup for early-exit: track seen keys in a Set
           for (const s of survivors) {
