@@ -95,3 +95,16 @@ test('top-classified streams do not consume balanced/efficient slots before thos
   assert.ok(names.some(n => n.includes('Balanced A')));
   assert.ok(names.some(n => n.includes('Efficient A')));
 });
+
+test('leftovers backfill preserves original arrival order', () => {
+  const runtimeMinutes = 120;
+  // Two top-tier streams but only 1 top slot — second overflows to leftovers
+  // Arrival order: Big (top), Medium (top→leftover), Small (efficient)
+  const big    = makeStream('Big',    30, '1080p'); // ~34 Mbps → top
+  const medium = makeStream('Medium', 20, '1080p'); // ~22 Mbps → top (overflows to leftover)
+  const small  = makeStream('Small',   1, '1080p'); // ~1.1 Mbps → efficient
+
+  const selected = applySmartTiering([big, medium, small], 1, 0, 1, { runtimeMinutes });
+  // With restore-order fix: result should respect original order (big before medium)
+  assert.equal(selected[0].name, 'Big 1080p');
+});

@@ -296,6 +296,9 @@ export function applySmartTiering(streams, tierTop, tierBalanced, tierEfficient,
     const needed = (tierTop + tierBalanced + tierEfficient) - selected.length;
     for (let i = 0; i < needed && leftovers.length > 0; i++) selected.push(leftovers.shift());
 
+    // Restore the original group order (input was already sorted by size/quality)
+    selected.sort((a, b) => group.indexOf(a) - group.indexOf(b));
+
     for (const s of selected) allSelected.push(s);
   }
 

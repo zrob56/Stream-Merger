@@ -1,5 +1,5 @@
 // api/utils/sort.js
-// Stream sorting: split-sort by cache status, trash/bloat penalties, automatic sub-tiers.
+// Stream sorting: split-sort by cache status, trash penalty, automatic sub-tiers.
 
 import {
   getCacheTier, isCachedDebrid, isEnglishAudio, hasEmbeddedSubs,
@@ -12,11 +12,6 @@ export const DIVERSITY_SOURCE_PRIORITY = ['Remux', 'BluRay', 'WEB-DL', 'WEBRip',
 export const DIVERSITY_HDR_PRIORITY    = ['DV', 'HDR10+', 'HDR10', 'HDR', 'HLG'];
 
 const TRASH_RE = /\b(cam|hdcam|ts|telesync|screener|scr|dvdscr|r5|tc|telecine)\b/i;
-
-export const BLOAT_GB = {
-  movie:  { '4k': 160, '2160p': 160, '1080p': 45, '720p': 15, '480p': 5, '360p': 5 },
-  series: { '4k': 30,  '2160p': 30,  '1080p': 12, '720p': 5,  '480p': 2, '360p': 2 },
-};
 
 // ---------------------------------------------------------------------------
 // Automatic sub-tier helpers (HDR → Audio → Codec)
@@ -57,28 +52,15 @@ function isTrash(stream) {
   return TRASH_RE.test(haystack);
 }
 
-function isBloat(stream, type) {
-  const size = extractSizeGb(stream);
-  if (size === 0) return false; // unknown size → no penalty
-  const res = extractResolution(stream);
-  const thresholds = BLOAT_GB[type] ?? BLOAT_GB.movie;
-  const threshold  = thresholds[res];
-  if (!threshold) return false;
-  return size > threshold;
-}
-
 // ---------------------------------------------------------------------------
 // Core comparator (shared by both split-sort halves)
 // ---------------------------------------------------------------------------
 
 function makeComparator(criteria) {
   return (a, b) => {
-    // Outermost: trash and bloat penalties
+    // Outermost: trash penalty
     const trashDiff = (a._isTrash ? 1 : 0) - (b._isTrash ? 1 : 0);
     if (trashDiff !== 0) return trashDiff;
-
-    const bloatDiff = (a._isBloat ? 1 : 0) - (b._isBloat ? 1 : 0);
-    if (bloatDiff !== 0) return bloatDiff;
 
     // User criteria
     for (const criterion of criteria) {
@@ -124,7 +106,7 @@ function makeComparator(criteria) {
  *
  * @param {object[]} streams
  * @param {string[]} sortCriteria - ordered array of sort keys
- * @param {string}   type         - 'movie' | 'series' (used for bloat thresholds)
+ * @param {string}   type         - 'movie' | 'series'
  * @returns {object[]}
  */
 export function sortStreams(streams, sortCriteria, type = 'movie') {
@@ -134,12 +116,10 @@ export function sortStreams(streams, sortCriteria, type = 'movie') {
   // 1. One-pass pre-calculation to save CPU cycles during sorting
   const memoized = streams.map(s => {
     // We only attach these properties temporarily for the sort phase
-    // _res and _size must be set before isBloat() so it hits memoized values
     s._res = extractResolution(s);
     s._size = extractSizeGb(s);
     s._cacheTier = getCacheTier(s);
     s._isTrash = isTrash(s);
-    s._isBloat = isBloat(s, type);
     s._seeders = extractSeeders(s);
     s._source = extractSourceQuality(s);
     s._isEng = isEnglishAudio(s);
