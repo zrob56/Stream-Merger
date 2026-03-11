@@ -108,3 +108,31 @@ test('leftovers backfill preserves original arrival order', () => {
   // With restore-order fix: result should respect original order (big before medium)
   assert.equal(selected[0].name, 'Big 1080p');
 });
+
+test('4K remux-only pool: proportional redistribution fills balanced and efficient slots', () => {
+  // All streams > 28 GB → all classify as 'top' on size path (groupMax=80, balancedMaxGb=28)
+  const streams = [
+    makeStream('A', 80, '4k'), makeStream('B', 70, '4k'), makeStream('C', 60, '4k'),
+    makeStream('D', 55, '4k'), makeStream('E', 50, '4k'), makeStream('F', 45, '4k'),
+    makeStream('G', 40, '4k'), makeStream('H', 35, '4k'), makeStream('I', 30, '4k'),
+  ];
+  const selected = applySmartTiering(streams, 2, 2, 2, { runtimeMinutes: 0 });
+  assert.equal(selected.length, 6);
+  // Largest streams fill top slots
+  assert.ok(selected.some(s => s.title.startsWith('80')), 'top slot should have largest stream');
+  // Smallest streams fill efficient slots — meaningful variety, not all remux-sized
+  assert.ok(selected.some(s => s.title.startsWith('30') || s.title.startsWith('35')), 'efficient slot should have smallest streams');
+});
+
+test('redistribution partially fills when surplus covers only balanced', () => {
+  // 4 top streams, tierTop=2, tierBalanced=2, tierEfficient=2
+  // Efficient surplus = 4-2-2 = 0 → no efficient borrow
+  // Balanced surplus = 4-2 = 2 → 2 borrowed for balanced
+  const streams = [
+    makeStream('T1', 80, '4k'), makeStream('T2', 70, '4k'),
+    makeStream('T3', 60, '4k'), makeStream('T4', 50, '4k'),
+  ];
+  const selected = applySmartTiering(streams, 2, 2, 2, { runtimeMinutes: 0 });
+  // 4 streams max: 2 top + 2 borrowed-as-balanced; efficient stays empty
+  assert.equal(selected.length, 4);
+});

@@ -270,6 +270,26 @@ export function applySmartTiering(streams, tierTop, tierBalanced, tierEfficient,
       else efficientStreams.push(s);
     }
 
+    // Proportional redistribution: when a lower tier is completely empty but top
+    // has surplus streams, borrow the weakest top-tier streams (tail of topStreams,
+    // which is quality-desc) to fill those tiers for meaningful quality variety.
+    // Efficient is reserved first so the quality hierarchy efficient < balanced < top
+    // is maintained after both borrows complete.
+    if (tierEfficient > 0 && efficientStreams.length === 0) {
+      const surplus = topStreams.length - tierTop - tierBalanced;
+      if (surplus > 0) {
+        const borrowCount = Math.min(surplus, tierEfficient);
+        efficientStreams.push(...topStreams.splice(topStreams.length - borrowCount, borrowCount));
+      }
+    }
+    if (tierBalanced > 0 && balancedStreams.length === 0) {
+      const surplus = topStreams.length - tierTop;
+      if (surplus > 0) {
+        const borrowCount = Math.min(surplus, tierBalanced);
+        balancedStreams.push(...topStreams.splice(topStreams.length - borrowCount, borrowCount));
+      }
+    }
+
     const selected = [];
 
     for (const s of topStreams) {
