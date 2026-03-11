@@ -211,12 +211,13 @@ export function classifyStreamTier(stream, resolution, options = {}) {
 
   if (runtimeMinutes > 0) {
     const mbps = extractBitrateMbps(stream, runtimeMinutes);
-    if (mbps <= 0) return 'unknown';
-
-    const t = BITRATE_THRESHOLDS_MBPS[resolution] ?? BITRATE_THRESHOLDS_MBPS.unknown;
-    if (mbps >= t.topMin) return 'top';
-    if (mbps >= t.balancedMin) return 'balanced';
-    return 'efficient';
+    if (mbps > 0) {
+      const t = BITRATE_THRESHOLDS_MBPS[resolution] ?? BITRATE_THRESHOLDS_MBPS.unknown;
+      if (mbps >= t.topMin) return 'top';
+      if (mbps >= t.balancedMin) return 'balanced';
+      return 'efficient';
+    }
+    // mbps <= 0: fall through to size-based path below
   }
 
   const groupMaxSizeGb = Number(options.groupMaxSizeGb ?? 0);

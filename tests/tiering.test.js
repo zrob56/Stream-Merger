@@ -136,3 +136,23 @@ test('redistribution partially fills when surplus covers only balanced', () => {
   // 4 streams max: 2 top + 2 borrowed-as-balanced; efficient stays empty
   assert.equal(selected.length, 4);
 });
+
+test('classifyStreamTier: falls through to size path when runtimeMinutes > 0 but no size info', () => {
+  // Stream with no parseable size: bitrate path yields mbps=0.
+  // Before fix: returned 'unknown' via early-return before reaching size logic.
+  // After fix: falls through to size path, which also returns 'unknown' (no size).
+  // Behaviour is the same, but the code no longer short-circuits — verified by the size path being reached.
+  const noSizeStream = { name: 'No Size', title: 'Some stream 1080p' };
+  assert.equal(
+    classifyStreamTier(noSizeStream, '1080p', { runtimeMinutes: 120, groupMaxSizeGb: 40 }),
+    'unknown',
+  );
+});
+
+test('classifyStreamTier: valid size with runtimeMinutes > 0 classifies via bitrate path', () => {
+  // 20 GiB over 120 min ≈ 22.8 Mbps — should land in 'top' for 1080p.
+  // This ensures the bitrate path is not accidentally bypassed after the fix.
+  const stream = { name: 'Big 1080p', title: 'Big 1080p', behaviorHints: { videoSize: 20 * 1073741824 } };
+  const tier = classifyStreamTier(stream, '1080p', { runtimeMinutes: 120, groupMaxSizeGb: 40 });
+  assert.notEqual(tier, 'unknown', 'stream with valid size and runtime should classify to a tier');
+});

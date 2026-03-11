@@ -297,7 +297,7 @@ export default async function handler(req, res) {
 
   // Short ID resolution: 8 hex chars → look up full config in Redis
   let resolvedConfig = rawConfig;
-  if (rawConfig.length === 8 && /^[a-f0-9]{8}$/.test(rawConfig)) {
+  if (rawConfig.length === 12 && /^[a-f0-9]{12}$/.test(rawConfig)) {
     const redis = await getRedis();
     if (!redis) { res.status(503).json({ error: 'Short URL service unavailable.' }); return; }
     const stored = await redis.get(`shorturl:${rawConfig}`);
@@ -633,7 +633,7 @@ export default async function handler(req, res) {
     const nextId = `${imdbId}:${season}:${nextEp}`;
     
     // Build the URL to our own aggregator endpoint
-    const protocol = req.headers['x-forwarded-proto'] || 'https';
+    const protocol = (req.headers['x-forwarded-proto'] ?? 'https').split(',')[0].trim();
     const host = req.headers.host;
     const warmupUrl = `${protocol}://${host}/api/stream?config=${encodeURIComponent(rawConfig)}&type=series&id=${nextId}`;
     
