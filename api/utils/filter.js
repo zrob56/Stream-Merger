@@ -23,7 +23,10 @@ function isTrailerStream(s) {
   const raw = `${s.name ?? ''} ${s.title ?? ''} ${s.description ?? ''} ${s.behaviorHints?.filename ?? ''}`;
   // Normalize dot-separated filenames so word-boundary checks work correctly
   const h = raw.replace(/\./g, ' ');
-  if (TRAILER_RE.test(h)) return true;
+  // Only apply keyword matching to streams with no size or tiny files (< 300 MB).
+  // This avoids false positives on movies/shows whose titles contain these words
+  // (e.g. "The Interview", "Extras", "Clip") since real playback files are always large.
+  if (TRAILER_RE.test(h) && extractSizeGb(s) < 0.3) return true;
   // Vintage TV commercials: standalone word "ad" in filename, tiny file (≤ 50 MB)
   if (/\bad\b/i.test(h) && extractSizeGb(s) < 0.05) return true;
   // YouTube / short external-only links that addons sometimes return as trailers
