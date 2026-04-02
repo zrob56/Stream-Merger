@@ -8,13 +8,15 @@ let _redis = null;
 
 async function getRedis() {
   if (_redis) return _redis;
-  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) return null;
+  
+  const url = process.env.DB_UPSTASH_REDIS_REST_URL;
+  const token = process.env.DB_UPSTASH_REDIS_REST_TOKEN;
+  
+  if (!url || !token) return null;
+  
   try {
     const { Redis } = await import('@upstash/redis');
-    _redis = new Redis({
-      url:   process.env.UPSTASH_REDIS_REST_URL,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN,
-    });
+    _redis = new Redis({ url, token });
     return _redis;
   } catch {
     return null;
