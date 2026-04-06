@@ -22,11 +22,9 @@ export function normalizeBingeGroup(streams, imdbId) {
   return streams.map((stream) => {
     const resolution = extractResolution(stream);
     
-    // Clean up the addon name to use as a safe string
-    const addonSafeName = (stream._addonName || 'unknown').toLowerCase().replace(/\s+/g, '-');
-    
-    // Add the addon name to the binge group to lock the autoplay session
-    const bingeGroup = `aggregator-${addonSafeName}-${imdbId}-${resolution}`;
+    // Universal binge group: locks to the Aggregator and Resolution, 
+    // completely ignoring which sub-addon the stream came from.
+    const bingeGroup = `aggregator-${imdbId}-${resolution}`;
     
     return {
       ...stream,
