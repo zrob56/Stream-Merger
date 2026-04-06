@@ -21,7 +21,13 @@ import {
 export function normalizeBingeGroup(streams, imdbId) {
   return streams.map((stream) => {
     const resolution = extractResolution(stream);
-    const bingeGroup = `aggregator-${imdbId}-${resolution}`;
+    
+    // Clean up the addon name to use as a safe string
+    const addonSafeName = (stream._addonName || 'unknown').toLowerCase().replace(/\s+/g, '-');
+    
+    // Add the addon name to the binge group to lock the autoplay session
+    const bingeGroup = `aggregator-${addonSafeName}-${imdbId}-${resolution}`;
+    
     return {
       ...stream,
       behaviorHints: {
@@ -126,11 +132,12 @@ export function sanitizeStream({ _addonIdx, _addonUrl, _addonName, _sources, des
   for (const key of Object.keys(s)) {
     if (key.startsWith('_')) delete s[key];
   }
+  
+  // If an HTTP URL is present, we only delete 'sources' (tracker lists).
+  // We MUST keep 'infoHash' and 'fileIdx' so Stremio can track watch progress.
   if (s.url) {
-    delete s.infoHash;
-    delete s.fileIdx;
     delete s.sources;
   }
+  
   return s;
 }
-
