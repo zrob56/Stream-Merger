@@ -29,6 +29,22 @@ export const AUDIO_TAGS = [
   [/\batmos\b/i, 'Atmos'], [/\btruehd\b/i, 'TrueHD'], [/\bdd\+|\bddp\b|\beac[- ]?3\b/i, 'DD+'],
   [/\bdts[- ]?hd\b/i, 'DTS-HD'], [/\bdts\b/i, 'DTS'], [/\baac\b/i, 'AAC'],
 ];
+export const SUBTITLE_TAGS = [
+  [/\b(?:eng|english|en)[-_. ]?sub(?:s|bed|titles?)?\b/i, 'Eng'],
+  [/\b(?:esub|esubs)\b/i, 'Eng'],
+  [/\b(?:spa|spanish|es)[-_. ]?sub(?:s|bed|titles?)?\b/i, 'Spa'],
+  [/\b(?:fre|french|fr)[-_. ]?sub(?:s|bed|titles?)?\b/i, 'Fre'],
+  [/\b(?:ara|arabic|ar)[-_. ]?sub(?:s|bed|titles?)?\b/i, 'Ara'],
+  [/\b(?:jpn|jp|japanese)[-_. ]?sub(?:s|bed|titles?)?\b/i, 'Jpn'],
+  [/\b(?:ita|italian|it)[-_. ]?sub(?:s|bed|titles?)?\b/i, 'Ita'],
+  [/\b(?:hin|hindi|hi)[-_. ]?sub(?:s|bed|titles?)?\b/i, 'Hin'],
+  [/\b(?:dut|dutch|nl)[-_. ]?sub(?:s|bed|titles?)?\b/i, 'Dut'],
+  [/\b(?:ger|german|de)[-_. ]?sub(?:s|bed|titles?)?\b/i, 'Ger'],
+  [/\b(?:por|portuguese|pt)[-_. ]?sub(?:s|bed|titles?)?\b/i, 'Por'],
+  [/\b(?:multi|dual)[- ]?sub(?:s|bed|titles?)?\b/i, 'Multi'],
+  [/\bmultisub\b/i, 'Multi'],
+  [/\b(?:hsub|hsubs|hardsub|hardcoded)\b/i, 'Hard'],
+];
 export const EDITION_TAGS = [
   [/\bdirector'?s[. ]cut\b/i,                "Director's Cut"],
   [/\bextended[. ](?:cut|edition|version)\b|\bextended\b/i, 'Extended'],
@@ -259,6 +275,17 @@ export function hasConfirmedSubs(stream) {
 }
 export function hasEmbeddedSubs(stream)  {
   return hasLikelySubs(stream) || hasConfirmedSubs(stream);
+}
+
+export function extractSubtitleLanguages(stream) {
+  const h = getHaystack(stream);
+  const subs = [];
+  for (const [re, label] of SUBTITLE_TAGS) {
+    if (re.test(h) && !subs.includes(label)) {
+      subs.push(label);
+    }
+  }
+  return subs;
 }
 
 export function parseConfig(raw) {

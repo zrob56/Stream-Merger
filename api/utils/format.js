@@ -3,7 +3,7 @@
 
 import {
   extractResolution, formatTagsWithIcons, getCacheTier, isCachedDebrid,
-  extractSeeders, extractSizeGb, RESOLUTION_ICONS, hasLikelySubs, hasConfirmedSubs,
+  extractSeeders, extractSizeGb, RESOLUTION_ICONS, hasLikelySubs, hasConfirmedSubs, extractSubtitleLanguages,
 } from './parse.js';
 
 // ---------------------------------------------------------------------------
@@ -101,8 +101,14 @@ export function formatStreamDisplay(streams, display) {
       }
     }
     if (show.has('subs')) {
-      if (hasConfirmedSubs(stream)) bottomLine.push('\u{1F4AC}');
-      else if (hasLikelySubs(stream)) bottomLine.push('\u{1F5E3}\uFE0F');
+      const subLangs = extractSubtitleLanguages(stream);
+      if (subLangs.length > 0) {
+        bottomLine.push(`\u{1F4AC} ${subLangs.join('/')}`);
+      } else if (hasConfirmedSubs(stream)) {
+        bottomLine.push('\u{1F4AC}');
+      } else if (hasLikelySubs(stream)) {
+        bottomLine.push('\u{1F5E3}\uFE0F');
+      }
     }
     if (bottomLine.length) titleParts.push(bottomLine.join('   '));
 
