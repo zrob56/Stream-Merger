@@ -37,17 +37,32 @@ function isTrailerStream(s) {
 }
 
 export function applyFilters(streams, filters) {
-  const needTagCheck = filters.requiredHdr.length > 0 || filters.requiredCodec.length > 0
+  const needRequiredTagCheck = filters.requiredHdr.length > 0 || filters.requiredCodec.length > 0
     || (filters.requiredSource && filters.requiredSource.length > 0)
     || (filters.requiredAudio && filters.requiredAudio.length > 0);
+  const needExclusionTagCheck = filters.excludeDvProfile5 || filters.excludeLosslessAudio;
 
   return streams.filter(s => {
+    if (needExclusionTagCheck) {
+      const tags = extractQualityTags(s);
+
+      if (filters.excludeDvProfile5) {
+        const isDv = tags.includes('DV');
+        const hasHdrFallback = tags.includes('HDR') || tags.includes('HDR10') || tags.includes('HDR10+');
+        if (isDv && !hasHdrFallback) return false;
+      }
+
+      if (filters.excludeLosslessAudio) {
+        if (tags.includes('TrueHD') || tags.includes('DTS-HD') || tags.includes('DTS-HD MA')) return false;
+      }
+    }
+
     if (isTrailerStream(s)) return false;
     if (filters.excludeTerms.length > 0) {
       const hay = `${s.name ?? ''} ${s.title ?? ''} ${s.description ?? ''} ${s.behaviorHints?.filename ?? ''}`.toLowerCase();
       if (filters.excludeTerms.some(t => hay.includes(t))) return false;
     }
-    if (needTagCheck) {
+    if (needRequiredTagCheck) {
       const tags = extractQualityTags(s);
       const hasMetadata = !!(s.name || s.title || s.behaviorHints?.filename);
       if (filters.requiredHdr.length > 0) {

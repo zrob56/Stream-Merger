@@ -525,7 +525,7 @@ export default async function handler(req, res) {
   // circuit-breaker-ordered addon list (most reliable first), which is fine.
   // formatStreamDisplay must run last so it doesn't corrupt name/title reads.
   const deduped     = deduplicateStreams(allStreams);
-  const sorted      = sortStreams(deduped, sort, type);
+  const sorted      = sortStreams(deduped, sort, type, filters);
   let filtered      = applyFilters(sorted, filters);
 
   // Fallback 1: If strict filters blocked everything, revert to sorted pool

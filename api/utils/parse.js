@@ -295,6 +295,9 @@ export function parseConfig(raw) {
       requiredCodec: (rf.requiredCodec ?? []).filter(t => CODEC_LABELS.includes(t)),
       requiredSource: (rf.requiredSource ?? []).filter(t => SOURCE_LABELS.includes(t)),
       requiredAudio: (rf.requiredAudio ?? []).filter(t => AUDIO_LABELS.includes(t)),
+      excludeDvProfile5: Boolean(rf.excludeDvProfile5),
+      excludeLosslessAudio: Boolean(rf.excludeLosslessAudio),
+      prioritize1080p: Boolean(rf.prioritize1080p),
     };
 
     const addonTimeouts = (parsed.addonTimeouts && typeof parsed.addonTimeouts === 'object')
@@ -306,7 +309,20 @@ export function parseConfig(raw) {
     return {
       addons: [], sort: ['cached', 'resolution', 'seeders', 'size'], display: DISPLAY_DEFAULTS.slice(),
       limit: 0, tierTop: 0, tierBalanced: 0, tierEfficient: 0, addonCap: 0, debug: false, trustProxies: false,
-      filters: { cachedOnly: false, minSeeders: 0, maxSizeGb: 0, minResolution: '', excludeTerms: [], requiredHdr: [], requiredCodec: [], requiredSource: [], requiredAudio: [] },
+      filters: {
+        cachedOnly: false,
+        minSeeders: 0,
+        maxSizeGb: 0,
+        minResolution: '',
+        excludeTerms: [],
+        requiredHdr: [],
+        requiredCodec: [],
+        requiredSource: [],
+        requiredAudio: [],
+        excludeDvProfile5: false,
+        excludeLosslessAudio: false,
+        prioritize1080p: false,
+      },
       addonTimeouts: {},
     };
   }

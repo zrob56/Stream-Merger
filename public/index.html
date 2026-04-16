@@ -66,7 +66,7 @@ const DISPLAY_OPTIONS = [
 ];
 const DEFAULT_DISPLAY = ['source', 'resolution', 'cached', 'tags', 'filename', 'seeders', 'size', 'subs'];
 
-const DEFAULT_FILTERS = { cachedOnly: false, minSeeders: 0, maxSizeGb: 0, minResolution: '', excludeTerms: [], requiredHdr: [], requiredCodec: [], requiredSource: [], requiredAudio: [] };
+const DEFAULT_FILTERS = { cachedOnly: false, minSeeders: 0, maxSizeGb: 0, minResolution: '', excludeTerms: [], requiredHdr: [], requiredCodec: [], requiredSource: [], requiredAudio: [], excludeDvProfile5: false, excludeLosslessAudio: false, prioritize1080p: false };
 
 const PREVIEW_OPTIONS = [
   { label: 'The Dark Knight',       value: 'tt0468569:movie'  },
@@ -159,7 +159,8 @@ function buildConfig(addons, sort, display, { limit, tierTop, tierBalanced, tier
   if (trustProxies) payload.trustProxies = true;
   if (filters.cachedOnly || filters.minSeeders > 0 || filters.maxSizeGb > 0 || filters.minResolution
       || filters.excludeTerms.length > 0 || filters.requiredHdr.length > 0
-      || filters.requiredCodec.length > 0 || filters.requiredSource.length > 0 || filters.requiredAudio.length > 0) {
+      || filters.requiredCodec.length > 0 || filters.requiredSource.length > 0 || filters.requiredAudio.length > 0
+      || filters.excludeDvProfile5 || filters.excludeLosslessAudio || filters.prioritize1080p) {
     payload.filters = filters;
   }
   if (addonTimeouts) {
@@ -655,6 +656,27 @@ function FiltersSection({ filters, setFilters, limit, setLimit, tierTop, setTier
         h('p', { className: 'text-xs text-zinc-500' }, 'Hide streams without the ⚡ instant-play indicator')
       )
     ),
+    h('label', { className: 'flex items-center gap-3 p-2.5 rounded border border-border bg-panel cursor-pointer hover:border-zinc-500 transition select-none' },
+      h('input', { type: 'checkbox', checked: filters.excludeDvProfile5, onChange: e => setFilters(f => ({ ...f, excludeDvProfile5: e.target.checked })), className: 'w-4 h-4 shrink-0 accent-violet-600' }),
+      h('div', { className: 'flex-1 min-w-0' },
+        h('p', { className: 'text-sm text-zinc-200' }, 'Exclude DV-Only (Profile 5)'),
+        h('p', { className: 'text-xs text-zinc-500' }, 'Fixes purple/green screen on TVs that do not support Dolby Vision')
+      )
+    ),
+    h('label', { className: 'flex items-center gap-3 p-2.5 rounded border border-border bg-panel cursor-pointer hover:border-zinc-500 transition select-none' },
+      h('input', { type: 'checkbox', checked: filters.excludeLosslessAudio, onChange: e => setFilters(f => ({ ...f, excludeLosslessAudio: e.target.checked })), className: 'w-4 h-4 shrink-0 accent-violet-600' }),
+      h('div', { className: 'flex-1 min-w-0' },
+        h('p', { className: 'text-sm text-zinc-200' }, 'Exclude lossless audio'),
+        h('p', { className: 'text-xs text-zinc-500' }, 'Drops TrueHD and DTS-HD to reduce buffering on standard TV/soundbar setups')
+      )
+    ),
+    h('label', { className: 'flex items-center gap-3 p-2.5 rounded border border-border bg-panel cursor-pointer hover:border-zinc-500 transition select-none' },
+      h('input', { type: 'checkbox', checked: filters.prioritize1080p, onChange: e => setFilters(f => ({ ...f, prioritize1080p: e.target.checked })), className: 'w-4 h-4 shrink-0 accent-violet-600' }),
+      h('div', { className: 'flex-1 min-w-0' },
+        h('p', { className: 'text-sm text-zinc-200' }, 'Prioritize 1080p over 4K'),
+        h('p', { className: 'text-xs text-zinc-500' }, 'Pushes 1080p streams above 4K when sorting by resolution')
+      )
+    ),
     h('div', { className: 'p-2.5 rounded border border-border bg-panel space-y-2' },
       h('div', null,
         h('p', { className: 'text-sm text-zinc-200' }, 'Exclude keywords'),
@@ -1109,7 +1131,8 @@ function App() {
 
   const hasActiveFilters = filters.cachedOnly || filters.minSeeders > 0 || filters.maxSizeGb > 0 || !!filters.minResolution
     || filters.excludeTerms.length > 0 || filters.requiredHdr.length > 0
-    || filters.requiredCodec.length > 0 || filters.requiredSource.length > 0 || filters.requiredAudio.length > 0;
+    || filters.requiredCodec.length > 0 || filters.requiredSource.length > 0 || filters.requiredAudio.length > 0
+    || filters.excludeDvProfile5 || filters.excludeLosslessAudio || filters.prioritize1080p;
 
   const addonCountPenalty = validAddons.length * 4;
   const perAddonTimeouts = validAddons.map(a => addonTimeouts[a.url] ?? 3000);
@@ -1317,6 +1340,9 @@ function App() {
           filters.requiredCodec.length > 0 && h('span', { className: 'px-2 py-0.5 rounded bg-panel border border-border' }, `codec: ${filters.requiredCodec.join('/')}`),
           filters.requiredSource.length > 0 && h('span', { className: 'px-2 py-0.5 rounded bg-panel border border-border' }, `src: ${filters.requiredSource.join('/')}`),
           filters.requiredAudio.length > 0 && h('span', { className: 'px-2 py-0.5 rounded bg-panel border border-border' }, `audio: ${filters.requiredAudio.join('/')}`),
+          filters.excludeDvProfile5 && h('span', { className: 'px-2 py-0.5 rounded bg-panel border border-border' }, 'no DV-P5'),
+          filters.excludeLosslessAudio && h('span', { className: 'px-2 py-0.5 rounded bg-panel border border-border' }, 'no lossless'),
+          filters.prioritize1080p && h('span', { className: 'px-2 py-0.5 rounded bg-panel border border-border' }, '1080p first'),
           filters.minSeeders > 0 && h('span', { className: 'px-2 py-0.5 rounded bg-panel border border-border' }, `≥${filters.minSeeders} seeders`),
           filters.maxSizeGb > 0 && h('span', { className: 'px-2 py-0.5 rounded bg-panel border border-border' }, `≤${filters.maxSizeGb} GB`),
           filters.minResolution && h('span', { className: 'px-2 py-0.5 rounded bg-panel border border-border' }, `≥${filters.minResolution}`),

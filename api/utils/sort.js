@@ -10,6 +10,7 @@ import {
 export const SOURCE_QUALITY_ORDER     = ['Remux', 'BluRay', 'WEB-DL', 'WEBRip', 'HDTV', 'DVD', 'unknown'];
 export const DIVERSITY_SOURCE_PRIORITY = ['Remux', 'BluRay', 'WEB-DL', 'WEBRip', 'HDTV', 'DVD'];
 export const DIVERSITY_HDR_PRIORITY    = ['DV', 'HDR10+', 'HDR10', 'HDR', 'HLG'];
+const RESOLUTION_SORT_ORDER_1080P = ['1080p', '4k', '2160p', '720p', '480p', '360p', 'unknown'];
 
 const TRASH_RE = /\b(cam|hdcam|ts|telesync|screener|scr|dvdscr|r5|tc|telecine)\b/i;
 
@@ -56,7 +57,9 @@ function isTrash(stream) {
 // Core comparator (shared by both split-sort halves)
 // ---------------------------------------------------------------------------
 
-function makeComparator(criteria) {
+function makeComparator(criteria, filters = {}) {
+  const resOrder = filters.prioritize1080p ? RESOLUTION_SORT_ORDER_1080P : QUALITY_ORDER;
+
   return (a, b) => {
     // Outermost: trash penalty
     const trashDiff = (a._isTrash ? 1 : 0) - (b._isTrash ? 1 : 0);
@@ -67,7 +70,7 @@ function makeComparator(criteria) {
       if (criterion === 'cached') continue;
       let diff = 0;
       if (criterion === 'resolution') {
-        diff = QUALITY_ORDER.indexOf(a._res) - QUALITY_ORDER.indexOf(b._res);
+        diff = resOrder.indexOf(a._res) - resOrder.indexOf(b._res);
       } else if (criterion === 'size') {
         diff = b._size - a._size;
       } else if (criterion === 'seeders') {
@@ -109,9 +112,9 @@ function makeComparator(criteria) {
  * @param {string}   type         - 'movie' | 'series'
  * @returns {object[]}
  */
-export function sortStreams(streams, sortCriteria, type = 'movie') {
+export function sortStreams(streams, sortCriteria, type = 'movie', filters = {}) {
   const criteria = Array.isArray(sortCriteria) ? sortCriteria : [sortCriteria];
-  const cmp = makeComparator(criteria);
+  const cmp = makeComparator(criteria, filters);
 
   // 1. One-pass pre-calculation to save CPU cycles during sorting
   const memoized = streams.map(s => {
