@@ -165,7 +165,7 @@ function buildConfig(addons, sort, display, { limit, tierTop, tierBalanced, tier
   }
   if (addonTimeouts) {
     const activeTimeouts = Object.fromEntries(
-      Object.entries(addonTimeouts).filter(([, v]) => v > 0)
+      Object.entries(addonTimeouts).filter(([k, v]) => v > 0 && addons.includes(k))
     );
     if (Object.keys(activeTimeouts).length > 0) payload.addonTimeouts = activeTimeouts;
   }
@@ -897,8 +897,14 @@ function App() {
 
   const addDebridAddon = (rawUrl, name) => {
     const url = toTransportUrl(rawUrl);
-    if (!url || selectedUrls.has(url)) return;
-    setSelected((prev) => [...prev, { url, name }]);
+    if (!url) return;
+    
+    const baseName = name.split(' ')[0];
+
+    setSelected((prev) => {
+      const withoutOldVersions = prev.filter((addon) => addon.name.split(' ')[0] !== baseName);
+      return [...withoutOldVersions, { url, name }];
+    });
   };
 
   const removeAddon = (i) => setSelected((prev) => prev.filter((_, idx) => idx !== i));

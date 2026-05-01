@@ -9,8 +9,8 @@ let _redis = null;
 async function getRedis() {
   if (_redis) return _redis;
   
-  const url = process.env.DB_UPSTASH_REDIS_REST_URL;
-  const token = process.env.DB_UPSTASH_REDIS_REST_TOKEN;
+  const url = process.env.DB_KV_REST_API_URL || process.env.DB_UPSTASH_REDIS_REST_URL;
+  const token = process.env.DB_KV_REST_API_TOKEN || process.env.DB_UPSTASH_REDIS_REST_TOKEN;
   
   if (!url || !token) return null;
   
