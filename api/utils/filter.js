@@ -18,6 +18,7 @@ const TRAILER_RE = /\b(trailer|teaser|promo|featurette|behind[\s-]the[\s-]scenes
 
 // Site-ad spam torrents: tiny video file named after a piracy domain (e.g. rarbg.com.mp4)
 const SPAM_DOMAIN_RE = /\b(?:rarbg|yts|eztv|limetorrents|torrentgalaxy|1337x|thepiratebay|kickass|ganool|extratorrents|torrentz)\s*\.(?:com|to|org|me|ag|io|net)\b/i;
+const ADULT_RE = /\b(?:porn|xxx|sex(?:ual)?|hentai|jav|nsfw|onlyfans|brazzers|blowjob|deepthroat|cumshot|bukkake|anal|hardcore|milf|lesbian|gangbang|orgy|erotic|balls[\s._-]*deep)\b/i;
 
 function isTrailerStream(s) {
   const raw = `${s.name ?? ''} ${s.title ?? ''} ${s.description ?? ''} ${s.behaviorHints?.filename ?? ''}`;
@@ -41,6 +42,7 @@ export function applyFilters(streams, filters) {
     || (filters.requiredSource && filters.requiredSource.length > 0)
     || (filters.requiredAudio && filters.requiredAudio.length > 0);
   const needExclusionTagCheck = filters.excludeDvProfile5 || filters.excludeLosslessAudio;
+  const allowAdult = Boolean(filters.allowAdult);
 
   return streams.filter(s => {
     if (needExclusionTagCheck) {
@@ -58,6 +60,10 @@ export function applyFilters(streams, filters) {
     }
 
     if (isTrailerStream(s)) return false;
+    if (!allowAdult) {
+      const hay = `${s.name ?? ''} ${s.title ?? ''} ${s.description ?? ''} ${s.behaviorHints?.filename ?? ''}`;
+      if (ADULT_RE.test(hay)) return false;
+    }
     if (filters.excludeTerms.length > 0) {
       const hay = `${s.name ?? ''} ${s.title ?? ''} ${s.description ?? ''} ${s.behaviorHints?.filename ?? ''}`.toLowerCase();
       if (filters.excludeTerms.some(t => hay.includes(t))) return false;

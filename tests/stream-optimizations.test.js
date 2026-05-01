@@ -64,7 +64,7 @@ test('pass 1 dedup: same behaviorHints.filename, no infoHash/url → deduped to 
 
 const BLANK_FILTERS = {
   excludeTerms: [], requiredHdr: [], requiredCodec: [], requiredSource: [],
-  requiredAudio: [], cachedOnly: false, minSeeders: 0, maxSizeGb: 0, minResolution: null,
+  requiredAudio: [], cachedOnly: false, minSeeders: 0, maxSizeGb: 0, minResolution: null, allowAdult: false,
 };
 
 test('trailer filter: keeps large streams whose title contains trailer keywords (The Interview, Extras)', () => {
@@ -94,4 +94,24 @@ test('trailer filter: still drops real trailers and featurettes (tiny or no size
   const result = applyFilters(streams, BLANK_FILTERS);
   assert.equal(result.length, 1);
   assert.ok(result[0].name.includes('Normal Movie'));
+});
+
+test('adult filter: blocks explicit titles by default', () => {
+  const streams = [
+    { name: 'Lincoln 2012 1080p BluRay x264', _size: 8.1 },
+    { name: 'Balls Deep in Paris Lincoln 1080p', _size: 2.4 },
+    { name: 'Family Movie Night', title: 'No adult terms here', _size: 1.2 },
+  ];
+  const result = applyFilters(streams, BLANK_FILTERS);
+  assert.equal(result.length, 2);
+  assert.ok(result.some(s => s.name.includes('Lincoln 2012')));
+  assert.ok(!result.some(s => s.name.includes('Balls Deep in Paris')));
+});
+
+test('adult filter: can be explicitly disabled with allowAdult=true', () => {
+  const streams = [
+    { name: 'Balls Deep in Paris Lincoln 1080p', _size: 2.4 },
+  ];
+  const result = applyFilters(streams, { ...BLANK_FILTERS, allowAdult: true });
+  assert.equal(result.length, 1);
 });
